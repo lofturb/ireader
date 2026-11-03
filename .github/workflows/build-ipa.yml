@@ -102,8 +102,11 @@ jobs:
       - name: Verificar que el binario es armv7 para iOS 9
         run: |
           set -euo pipefail
-          BIN=$(find "$GITHUB_WORKSPACE/$APP_DIR/.theos" -type f -name "$APP_NAME" | head -n 1)
-          if [ -z "$BIN" ]; then echo "No se encontro el binario $APP_NAME"; exit 1; fi
+          IPA=$(ls "$GITHUB_WORKSPACE/$APP_DIR/packages/"*.ipa | head -n 1)
+          rm -rf /tmp/binario && mkdir -p /tmp/binario
+          unzip -o -q "$IPA" -d /tmp/binario
+          BIN="/tmp/binario/Payload/$APP_NAME.app/$APP_NAME"
+          if [ ! -f "$BIN" ]; then echo "No se encontro el binario $APP_NAME"; exit 1; fi
           echo "Binario: $BIN"
           file "$BIN"
           "$THEOS/toolchain/linux/iphone/bin/otool" -hv "$BIN" || true
@@ -124,11 +127,18 @@ jobs:
       - name: Comprobar los entitlements
         run: |
           set -euo pipefail
-          BIN=$(find "$GITHUB_WORKSPACE/$APP_DIR/.theos" -type f -name "$APP_NAME" | head -n 1)
+          IPA=$(ls "$GITHUB_WORKSPACE/$APP_DIR/packages/"*.ipa | head -n 1)
+          rm -rf /tmp/ipa && mkdir -p /tmp/ipa
+          unzip -o -q "$IPA" -d /tmp/ipa
+          BIN="/tmp/ipa/Payload/$APP_NAME.app/$APP_NAME"
           LDID=$(find "$THEOS" -type f -name 'ldid' | head -n 1)
           echo "ldid: $LDID"
           if [ -n "$LDID" ]; then
-            "$LDID" -e "$BIN" || echo "(no se pudieron leer los entitlements)"
+            "$LDID" -e "$BIN" | tee /tmp/entitlements.txt
+            grep -q "platform-application" /tmp/entitlements.txt \
+              || { echo "Faltan los entitlements de plataforma"; exit 1; }
+            grep -q "com.lofturb.ireader" /tmp/entitlements.txt \
+              || { echo "El application-identifier no coincide"; exit 1; }
           else
             echo "(ldid no encontrado; se omite la comprobacion)"
           fi

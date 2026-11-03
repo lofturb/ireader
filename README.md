@@ -80,7 +80,9 @@ ejecuta al subir a `main` o a mano desde "Run workflow".
 
 ## Instalar
 
-1. Descarga el `.ipa` del ultimo Release o de los artefactos del flujo.
+1. Descarga el `.ipa` del ultimo
+   [Release](https://github.com/lofturb/ireader/releases/latest) o de los
+   artefactos del flujo.
 2. Instalalo con AltStore, Sideloadly o `ideviceinstaller`:
    ```sh
    ideviceinstaller -i IReader.ipa
