@@ -445,7 +445,7 @@ shouldRecognizeSimultaneouslyWithGestureRecognizer:(UIGestureRecognizer *)otro {
             [IRToast showIn:fuerte.view message:@"La busqueda es demasiado corta."];
             return;
         }
-        [fuerte.searchReaderWithQuery:consulta];
+        [fuerte searchReaderWithQuery:consulta];
     }];
 }
 
