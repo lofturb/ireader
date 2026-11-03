@@ -7,8 +7,9 @@ Lector de documentos y biblioteca para iPad mini 1 (iOS 9.3.6, armv7).
 - Biblioteca con portadas, colecciones, favoritos y busqueda.
 - PDF con render exacto por pagina (CGPDFDocument + CATiledLayer), zoom,
   miniaturas, indice, marcadores, notas y contrasena.
-- EPUB, Office (DOC/DOCX/XLS/XLSX/PPT/PPTX), HTML y SVG con el CSS y las
-  fuentes originales: se muestran tal cual, sin reflow por defecto.
+- EPUB, Office moderno (DOCX/XLSX/PPTX), HTML y SVG con el CSS y las fuentes
+  originales: se muestran tal cual, sin reflow por defecto. Los formatos
+  antiguos DOC/XLS/PPT avisan y proponen exportar a PDF.
 - Texto plano, Markdown, RTF, CSV, JSON, XML y codigo con paginacion real.
 - Imagenes, comics CBZ, audio y video.
 - Visor hexadecimal para cualquier archivo desconocido.
