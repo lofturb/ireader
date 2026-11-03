@@ -336,7 +336,7 @@
     return [NSString stringWithFormat:@"Pág. %ld de %ld", (long)(self.pageIndex + 1), (long)self.pageCount];
 }
 
-- (NSInteger)pageCount { return self.pageCount; }
+- (NSInteger)pageCount { return _pageCount; }
 - (NSInteger)currentPage { return self.pageIndex + 1; }
 
 - (void)goToPage:(NSInteger)page {

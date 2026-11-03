@@ -107,7 +107,7 @@ static NSCache *IRCoverCache(void) {
 
 - (void)configureWithDocument:(IRDocument *)document {
     self.document = document;
-    self.titleLabel.text = document.title.length ? document.title : @"Sin tÃ­tulo";
+    self.titleLabel.text = document.title.length ? document.title : @"Sin título";
     self.authorLabel.text = document.displayAuthor;
 
     UIImage *portada = nil;
@@ -229,7 +229,7 @@ static NSCache *IRCoverCache(void) {
     };
     [tipo drawAtPoint:CGPointMake(caja.origin.x, caja.origin.y) withAttributes:attrsTipo];
 
-    NSString *titulo = document.title.length ? document.title : @"Sin tÃ­tulo";
+    NSString *titulo = document.title.length ? document.title : @"Sin título";
     UIFont *fuente = [UIFont fontWithName:@"Georgia-Bold" size:MAX(11, size.width * 0.085)]
                      ?: [UIFont boldSystemFontOfSize:MAX(11, size.width * 0.085)];
     NSMutableParagraphStyle *parrafo = [[NSMutableParagraphStyle alloc] init];
