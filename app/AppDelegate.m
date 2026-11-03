@@ -40,18 +40,8 @@ didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
         });
     }
 
-    [[NSNotificationCenter defaultCenter] addObserver:self
-                                             selector:@selector(appDidEnterBackground:)
-                                                 name:UIApplicationDidEnterBackgroundNotification
-                                               object:nil];
-    [[NSNotificationCenter defaultCenter] addObserver:self
-                                             selector:@selector(appWillResignActive:)
-                                                 name:UIApplicationWillResignActiveNotification
-                                               object:nil];
-    [[NSNotificationCenter defaultCenter] addObserver:self
-                                             selector:@selector(appDidBecomeActive:)
-                                                 name:UIApplicationDidBecomeActiveNotification
-                                               object:nil];
+    // Los avisos de ciclo de vida llegan ya por los metodos del delegado
+    // (applicationDidBecomeActive:, etc.); no hace falta observarlos otra vez.
     return YES;
 }
 
