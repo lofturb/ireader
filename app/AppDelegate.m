@@ -113,7 +113,7 @@ didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
 
 - (BOOL)application:(UIApplication *)app
             openURL:(NSURL *)url
-            options:(NSDictionary<UIApplicationOpenURLOptionsKey, id> *)options {
+            options:(NSDictionary *)options {
     if (!url.isFileURL) return NO;
     IRRootViewController *raiz = (IRRootViewController *)self.window.rootViewController;
     [[IRImportManager shared] importFileAtPath:url.path completion:^(IRDocument *doc, NSError *error) {
