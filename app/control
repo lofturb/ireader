@@ -1,0 +1,10 @@
+Package: com.lofturb.ireader
+Name: IReader
+Version: 1.0.0
+Architecture: iphoneos-arm
+Description: Lector y biblioteca para iPad mini 1 (iOS 9) que abre PDF, EPUB, texto, imagenes, comics y Office mostrando cada documento tal cual es, guardando siempre la pagina donde se dejo.
+Homepage: https://github.com/lofturb/ireader
+Maintainer: lofturb
+Author: lofturb
+Section: Applications
+Depends: firmware (>= 9.0)

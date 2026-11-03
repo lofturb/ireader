@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Biblioteca de prueba</title>
+  <updated>2026-01-01T00:00:00Z</updated>
+  <entry>
+    <title>Primer documento</title>
+    <summary>Un resumen corto para comprobar el visor XML.</summary>
+  </entry>
+  <entry>
+    <title>Segundo documento</title>
+    <summary>Otro resumen con acentos: cancion, nino, arbol.</summary>
+  </entry>
+</feed>

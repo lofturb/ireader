@@ -1,0 +1,14 @@
+app/.theos/
+app/packages/
+app/recursos-generados.txt
+theos/
+*.o
+*.d
+*.ipa
+__pycache__/
+tests/muestras/*.pdf
+tests/muestras/*.epub
+tests/muestras/*.cbz
+tests/muestras/*.docx
+tests/muestras/*.xlsx
+tests/muestras/*.pptx

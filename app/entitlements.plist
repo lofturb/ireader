@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Identidad. Debe coincidir con CFBundleIdentifier. -->
+	<key>application-identifier</key>
+	<string>com.lofturb.ireader</string>
+	<key>com.apple.developer.team-identifier</key>
+	<string>com.lofturb</string>
+
+	<!-- App de jailbreak: sin sandbox, tratada como app de plataforma. -->
+	<key>platform-application</key>
+	<true/>
+	<key>com.apple.private.security.no-sandbox</key>
+	<true/>
+	<key>com.apple.private.security.no-container</key>
+	<true/>
+
+	<!-- Lectura amplia del sistema para abrir cualquier archivo; escritura en
+	     el contenedor de la app y en las zonas del usuario mobile. -->
+	<key>com.apple.security.exception.files.absolute-path.read-write</key>
+	<array>
+		<string>/</string>
+		<string>/private/</string>
+		<string>/var/</string>
+		<string>/var/mobile/</string>
+		<string>/var/mobile/Media/</string>
+		<string>/var/mobile/Documents/</string>
+		<string>/private/var/</string>
+	</array>
+	<key>com.apple.security.exception.files.absolute-path.read-only</key>
+	<array>
+		<string>/</string>
+		<string>/System/</string>
+	</array>
+
+	<key>get-task-allow</key>
+	<true/>
+</dict>
+</plist>

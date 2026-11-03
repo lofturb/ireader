@@ -1,0 +1,62 @@
+#import <UIKit/UIKit.h>
+
+typedef NS_ENUM(NSInteger, IRGlyph) {
+    IRGlyphLibrary = 0,
+    IRGlyphBook,
+    IRGlyphBookmark,
+    IRGlyphBookmarkFill,
+    IRGlyphSearch,
+    IRGlyphGear,
+    IRGlyphFolder,
+    IRGlyphWifi,
+    IRGlyphChevronLeft,
+    IRGlyphChevronRight,
+    IRGlyphChevronUp,
+    IRGlyphChevronDown,
+    IRGlyphGrid,
+    IRGlyphList,
+    IRGlyphSun,
+    IRGlyphMoon,
+    IRGlyphTextSize,
+    IRGlyphTOC,
+    IRGlyphNote,
+    IRGlyphTrash,
+    IRGlyphInfo,
+    IRGlyphClose,
+    IRGlyphPlus,
+    IRGlyphCheck,
+    IRGlyphArrowLeft,
+    IRGlyphArrowRight,
+    IRGlyphArrowUp,
+    IRGlyphArrowDown,
+    IRGlyphPlay,
+    IRGlyphPause,
+    IRGlyphZoomIn,
+    IRGlyphZoomOut,
+    IRGlyphRefresh,
+    IRGlyphFile,
+    IRGlyphImage,
+    IRGlyphLock,
+    IRGlyphSort,
+    IRGlyphHome,
+    IRGlyphStar,
+    IRGlyphStarFill,
+    IRGlyphClock,
+    IRGlyphGlobe,
+    IRGlyphBrightness,
+    IRGlyphFont,
+    IRGlyphPage,
+    IRGlyphTwoPage,
+    IRGlyphMore,
+    IRGlyphDownload,
+    IRGlyphUpload,
+    IRGlyphHex,
+    IRGlyphBack,
+    IRGlyphOriginal
+};
+
+@interface IRIcons : NSObject
+
++ (UIImage *)icon:(IRGlyph)glyph size:(CGFloat)size color:(UIColor *)color;
+
+@end

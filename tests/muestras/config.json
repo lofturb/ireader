@@ -1,0 +1,18 @@
+{
+  "aplicacion": "IReader",
+  "version": "1.0.0",
+  "idioma": "es",
+  "formatos": [
+    "pdf",
+    "epub",
+    "txt",
+    "md",
+    "html",
+    "cbz"
+  ],
+  "lectura": {
+    "tema": "papel",
+    "guardarPosicion": true,
+    "dosPaginas": false
+  }
+}
