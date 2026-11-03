@@ -1,6 +1,7 @@
 #import "IREPUBDocument.h"
 #import "IRArchive.h"
 #import "IRUtils.h"
+#import <CommonCrypto/CommonDigest.h>
 
 typedef NS_ENUM(NSInteger, IREPUBParseMode) {
     IREPUBParseModeNone = 0,
@@ -126,7 +127,7 @@ typedef NS_ENUM(NSInteger, IREPUBParseMode) {
 #pragma mark - Construccion
 
 - (void)buildSpine {
-    [self.spine removeAllObjects];
+    [(NSMutableArray *)self.spine removeAllObjects];
     NSString *opfDir = [self.opfPath stringByDeletingLastPathComponent];
     for (NSDictionary *ref in self.spineRefs) {
         NSString *idref = ref[@"idref"];
@@ -137,7 +138,7 @@ typedef NS_ENUM(NSInteger, IREPUBParseMode) {
         NSString *full = [[opfDir stringByAppendingPathComponent:href] stringByStandardizingPath];
         if (![full hasPrefix:self.rootPath]) continue;
         NSString *linear = ref[@"linear"] ?: @"yes";
-        [self.spine addObject:@{
+        [(NSMutableArray *)self.spine addObject:@{
             @"idref": idref ?: @"",
             @"href": href,
             @"fullPath": full,
@@ -149,8 +150,8 @@ typedef NS_ENUM(NSInteger, IREPUBParseMode) {
 }
 
 - (void)parseTOC {
-    [self.toc removeAllObjects];
-    [self.tocFlat removeAllObjects];
+    [(NSMutableArray *)self.toc removeAllObjects];
+    [(NSMutableArray *)self.tocFlat removeAllObjects];
 
     NSString *navHref = nil;
     NSString *ncxHref = nil;
@@ -182,7 +183,7 @@ typedef NS_ENUM(NSInteger, IREPUBParseMode) {
         NSInteger i = 0;
         for (NSDictionary *s in self.spine) {
             NSString *nombre = [[s[@"fullPath"] lastPathComponent] stringByDeletingPathExtension];
-            [self.toc addObject:[IRTOCItem itemWithTitle:nombre page:i + 1 index:i anchor:@"" level:0]];
+            [(NSMutableArray *)self.toc addObject:[IRTOCItem itemWithTitle:nombre page:i + 1 index:i anchor:@"" level:0]];
             i++;
         }
         return;
@@ -208,7 +209,7 @@ typedef NS_ENUM(NSInteger, IREPUBParseMode) {
         }
         if (idx < 0) continue;
         if (!titulo.length) titulo = [NSString stringWithFormat:@"Capítulo %ld", (long)idx + 1];
-        [self.toc addObject:[IRTOCItem itemWithTitle:titulo page:idx + 1 index:idx anchor:ancla level:nivel]];
+        [(NSMutableArray *)self.toc addObject:[IRTOCItem itemWithTitle:titulo page:idx + 1 index:idx anchor:ancla level:nivel]];
     }
 }
 
@@ -420,7 +421,7 @@ typedef NS_ENUM(NSInteger, IREPUBParseMode) {
             d[@"title"] = @"";
             d[@"href"] = @"";
             d[@"level"] = @(self.tocStack.count);
-            [self.tocFlat addObject:d];
+            [(NSMutableArray *)self.tocFlat addObject:d];
             [self.tocStack addObject:d];
         } else if ([name isEqualToString:@"text"]) {
             if (self.tocStack.count) {
@@ -449,7 +450,7 @@ typedef NS_ENUM(NSInteger, IREPUBParseMode) {
                 d[@"title"] = @"";
                 d[@"href"] = attributes[@"href"] ?: @"";
                 d[@"level"] = @(MAX(0, self.navDepth - 1));
-                [self.tocFlat addObject:d];
+                [(NSMutableArray *)self.tocFlat addObject:d];
                 self.navCurrent = d;
                 self.currentText = @"";
                 self.capturingNavText = YES;
