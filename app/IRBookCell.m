@@ -107,7 +107,7 @@ static NSCache *IRCoverCache(void) {
 
 - (void)configureWithDocument:(IRDocument *)document {
     self.document = document;
-    self.titleLabel.text = document.title.length ? document.title : @"Sin título";
+    self.titleLabel.text = document.title.length ? document.title : @"Sin tÃ­tulo";
     self.authorLabel.text = document.displayAuthor;
 
     UIImage *portada = nil;
@@ -169,7 +169,7 @@ static NSCache *IRCoverCache(void) {
             self.progressTrack.bounds.size.width * MAX(0, MIN(1, [self.document.progress fraction])),
             4);
 
-        CGFloat y = CGRectGetMaxY(self.coverFrame) + 6;
+        CGFloat y = CGRectGetMaxY(self.coverFrame.frame) + 6;
         self.titleLabel.frame = CGRectMake(p, y, w - p * 2, 34);
         self.authorLabel.frame = CGRectMake(p, y + 35, w - p * 2, 15);
         self.progressLabel.frame = CGRectZero;
@@ -185,7 +185,7 @@ static NSCache *IRCoverCache(void) {
         self.badgeLabel.frame = CGRectZero;
         self.favoriteView.frame = CGRectMake(3, 3, 12, 12);
 
-        CGFloat x = CGRectGetMaxX(self.coverFrame) + 12;
+        CGFloat x = CGRectGetMaxX(self.coverFrame.frame) + 12;
         CGFloat ancho = w - x - 30;
         self.titleLabel.frame = CGRectMake(x, 12, ancho, 22);
         self.authorLabel.frame = CGRectMake(x, 34, ancho, 16);
@@ -229,7 +229,7 @@ static NSCache *IRCoverCache(void) {
     };
     [tipo drawAtPoint:CGPointMake(caja.origin.x, caja.origin.y) withAttributes:attrsTipo];
 
-    NSString *titulo = document.title.length ? document.title : @"Sin título";
+    NSString *titulo = document.title.length ? document.title : @"Sin tÃ­tulo";
     UIFont *fuente = [UIFont fontWithName:@"Georgia-Bold" size:MAX(11, size.width * 0.085)]
                      ?: [UIFont boldSystemFontOfSize:MAX(11, size.width * 0.085)];
     NSMutableParagraphStyle *parrafo = [[NSMutableParagraphStyle alloc] init];
