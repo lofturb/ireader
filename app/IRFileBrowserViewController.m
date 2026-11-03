@@ -158,7 +158,7 @@
     self.titleLabel.frame = CGRectMake(94, top + 6, w - 110, 22);
     self.pathLabel.frame = CGRectMake(94, top + 28, w - 110, 16);
 
-    self.quickBar.frame = CGRectMake(0, CGRectGetMaxY(self.topBar), w, 56);
+    self.quickBar.frame = CGRectMake(0, CGRectGetMaxY(self.topBar.frame), w, 56);
     CGFloat qx = 16;
     CGFloat qw = (w - 32 - 3 * 8) / 4;
     for (UIView *v in self.quickBar.subviews) {
@@ -168,11 +168,11 @@
         }
     }
 
-    self.searchBox.frame = CGRectMake(16, CGRectGetMaxY(self.quickBar) + 2, w - 32, 36);
+    self.searchBox.frame = CGRectMake(16, CGRectGetMaxY(self.quickBar.frame) + 2, w - 32, 36);
     self.searchIcon.frame = CGRectMake(10, 9, 17, 17);
     self.searchField.frame = CGRectMake(33, 0, w - 32 - 42, 36);
-    self.tableView.frame = CGRectMake(0, CGRectGetMaxY(self.searchBox) + 6, w,
-                                      self.view.bounds.size.height - CGRectGetMaxY(self.searchBox) - 6);
+    self.tableView.frame = CGRectMake(0, CGRectGetMaxY(self.searchBox.frame) + 6, w,
+                                      self.view.bounds.size.height - CGRectGetMaxY(self.searchBox.frame) - 6);
     self.emptyLabel.frame = CGRectMake(30, self.tableView.frame.origin.y + 80, w - 60, 60);
 }
 
