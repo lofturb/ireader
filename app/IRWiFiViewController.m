@@ -5,6 +5,7 @@
 #import "IRUtils.h"
 #import "IRIcons.h"
 #import "IRDialog.h"
+#import "IRImportManager.h"
 #import <CoreImage/CoreImage.h>
 
 @interface IRWiFiViewController ()
@@ -263,13 +264,17 @@
     CGFloat escala = MIN(tam.width / imagen.extent.size.width,
                          tam.height / imagen.extent.size.height);
     CIImage *escalada = [imagen imageByApplyingTransform:CGAffineTransformMakeScale(escala, escala)];
+    CIContext *contexto = [CIContext contextWithOptions:nil];
+    CGImageRef cg = [contexto createCGImage:escalada fromRect:escalada.extent];
+    if (!cg) return nil;
     UIGraphicsBeginImageContextWithOptions(tam, YES, 1);
     CGContextRef ctx = UIGraphicsGetCurrentContext();
     CGContextSetFillColorWithColor(ctx, [UIColor whiteColor].CGColor);
     CGContextFillRect(ctx, CGRectMake(0, 0, tam.width, tam.height));
-    CGContextDrawImage(ctx, CGRectMake(0, 0, tam.width, tam.height), escalada.CGImage);
+    CGContextDrawImage(ctx, CGRectMake(0, 0, tam.width, tam.height), cg);
     UIImage *salida = UIGraphicsGetImageFromCurrentImageContext();
     UIGraphicsEndImageContext();
+    CGImageRelease(cg);
     return salida;
 }
 
