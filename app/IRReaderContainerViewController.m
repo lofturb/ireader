@@ -47,6 +47,10 @@
 @property (nonatomic, assign) BOOL cerrando;
 @property (nonatomic, assign) BOOL didApplyInitialPage;
 
+// Busqueda dentro del documento.
+- (void)showSearch;
+- (void)searchReaderWithQuery:(NSString *)consulta;
+
 @end
 
 @implementation IRReaderContainerViewController
