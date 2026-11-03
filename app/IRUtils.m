@@ -220,8 +220,10 @@
         return @"";
     }
     // Binario con NUL: no es texto.
-    if (memchr(data.bytes, 0, MIN(data.length, 4096))) {
-        return nil;
+    const unsigned char *bytes = data.bytes;
+    NSUInteger limite = MIN(data.length, (NSUInteger)4096);
+    for (NSUInteger i = 0; i < limite; i++) {
+        if (bytes[i] == 0) return nil;
     }
     NSStringEncoding lista[] = {
         NSUTF8StringEncoding,
