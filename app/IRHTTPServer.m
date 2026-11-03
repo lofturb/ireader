@@ -241,7 +241,7 @@ static NSString *IRReason(int codigo) {
             return;
         }
         NSString *nombre = [[ruta lastPathComponent] stringByRemovingPercentEncoding];
-        if (!nombre.length) nombre = [IRFileSafeName:@"subida"];
+        if (!nombre.length) nombre = IRFileSafeName(@"subida");
         [self guardarCuerpo:cuerpo nombre:nombre cfd:cfd];
         return;
     }
@@ -272,7 +272,7 @@ static NSString *IRReason(int codigo) {
                 NSInteger guardados = [self guardarMultipart:cuerpo tipo:tipoContenido];
                 [self responderJSON:cfd ok:YES mensaje:(guardados > 0 ? @"Recibido" : @"Sin archivos")];
             } else {
-                NSString *nombre = nombreConsulta.length ? nombreConsulta : [IRFileSafeName:@"subida"];
+                NSString *nombre = nombreConsulta.length ? nombreConsulta : IRFileSafeName(@"subida");
                 [self guardarCuerpo:cuerpo nombre:nombre cfd:cfd];
             }
             return;
@@ -542,7 +542,7 @@ static NSString *IRReason(int codigo) {
         [salida addObject:@{
             @"name": nombre,
             @"size": atributos[NSFileSize] ?: @0,
-            @"date": @([[atributos[NSFileModificationDate] ?: [NSDate date] timeIntervalSince1970] doubleValue])
+            @"date": @([(atributos[NSFileModificationDate] ?: [NSDate date]) timeIntervalSince1970])
         }];
     }
     return salida;
