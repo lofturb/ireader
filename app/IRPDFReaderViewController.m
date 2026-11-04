@@ -343,6 +343,7 @@
     self.pageIndex = index;
 
     if (self.verticalMode) {
+        self.restaurandoPosicion = YES;
         self.scrollView.zoomScale = 1;
         [self.pageViews removeAllObjects];
         [self.pagesContainer removeFromSuperview];
@@ -351,7 +352,6 @@
         [self.scrollView addSubview:self.pagesContainer];
         [self rebuildPageFrames];
 
-        self.restaurandoPosicion = restore;
         if (restore) {
             IRProgress *p = self.document.progress;
             double factor = p.zoom;
