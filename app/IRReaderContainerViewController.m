@@ -364,6 +364,13 @@ shouldRecognizeSimultaneouslyWithGestureRecognizer:(UIGestureRecognizer *)otro {
                                                   style:IRDialogActionStyleDefault
                                                 handler:^{ [self showGoToPage]; }]];
 
+    [acciones addObject:[IRDialogAction actionWithTitle:@"Ir al inicio"
+                                                  style:IRDialogActionStyleDefault
+                                                handler:^{
+        [self.reader goToPage:1];
+        [self refreshChrome];
+    }]];
+
     [acciones addObject:[IRDialogAction actionWithTitle:@"Ajustes de lectura"
                                                   style:IRDialogActionStyleDefault
                                                 handler:^{ [self showReadingSettings]; }]];
