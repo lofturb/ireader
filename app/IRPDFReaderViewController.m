@@ -204,6 +204,8 @@
 - (void)viewWillDisappear:(BOOL)animated {
     [super viewWillDisappear:animated];
     [self saveProgressNow];
+    NSLog(@"[IReader] guardar PDF pagina %ld/%ld ratio %.4f",
+          (long)self.document.progress.page, (long)self.pageCount, self.document.progress.ratio);
 }
 
 - (CGRect)frameForPage:(NSInteger)index {
@@ -406,6 +408,8 @@
     if (!self.pdf) return;
     IRProgress *p = self.document.progress;
     NSInteger pagina = MAX(0, MIN(self.pageCount - 1, p.page - 1));
+    NSLog(@"[IReader] restaurar PDF pagina %ld/%ld ratio %.4f offset %.3f,%.3f zoom %.2f",
+          (long)(pagina + 1), (long)self.pageCount, p.ratio, p.offset.x, p.offset.y, p.zoom);
     BOOL anterior = self.restaurandoPosicion;
     self.restaurandoPosicion = YES;
     self.pageIndex = pagina;
