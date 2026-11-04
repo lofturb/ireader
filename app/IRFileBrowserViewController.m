@@ -61,7 +61,7 @@
     self.pickButton.layer.cornerRadius = 9;
     self.pickButton.titleLabel.font = [IRTheme shared].fontSubhead;
     [self.pickButton setTitle:@"Usar esta carpeta" forState:UIControlStateNormal];
-    [self.pickButton setTitleColor:[IRTheme shared].onAccent forState:UIControlStateNormal];
+    [self.pickButton setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
     [self.pickButton addTarget:self action:@selector(pickTapped:)
               forControlEvents:UIControlEventTouchUpInside];
     self.pickButton.hidden = !self.picksFolder;
