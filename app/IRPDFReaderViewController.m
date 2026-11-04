@@ -674,6 +674,8 @@
 
 - (void)goToPage:(NSInteger)page {
     if (!self.pdf) return;
+    // Una orden explicita de pagina manda sobre la posicion guardada.
+    self.pendingRestore = NO;
     NSInteger indice = MAX(1, MIN(self.pageCount, page)) - 1;
 
     if (self.verticalMode) {
