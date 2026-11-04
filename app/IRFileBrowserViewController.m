@@ -10,6 +10,7 @@
 @property (nonatomic, strong) UIView *topBar;
 @property (nonatomic, strong) UIButton *closeButton;
 @property (nonatomic, strong) UIButton *backButton;
+@property (nonatomic, strong) UIButton *pickButton;
 @property (nonatomic, strong) UILabel *titleLabel;
 @property (nonatomic, strong) UILabel *pathLabel;
 @property (nonatomic, strong) UIView *quickBar;
@@ -54,6 +55,17 @@
                      forState:UIControlStateNormal];
     [self.backButton addTarget:self action:@selector(backTapped:) forControlEvents:UIControlEventTouchUpInside];
     [self.topBar addSubview:self.backButton];
+
+    self.pickButton = [UIButton buttonWithType:UIButtonTypeCustom];
+    self.pickButton.backgroundColor = [IRTheme shared].accent;
+    self.pickButton.layer.cornerRadius = 9;
+    self.pickButton.titleLabel.font = [IRTheme shared].fontSubhead;
+    [self.pickButton setTitle:@"Usar esta carpeta" forState:UIControlStateNormal];
+    [self.pickButton setTitleColor:[IRTheme shared].onAccent forState:UIControlStateNormal];
+    [self.pickButton addTarget:self action:@selector(pickTapped:)
+              forControlEvents:UIControlEventTouchUpInside];
+    self.pickButton.hidden = !self.picksFolder;
+    [self.topBar addSubview:self.pickButton];
 
     self.titleLabel = [[UILabel alloc] init];
     self.titleLabel.font = [IRTheme shared].fontHeadline;
@@ -157,6 +169,12 @@
     self.backButton.frame = CGRectMake(50, top + 9, 36, 36);
     self.titleLabel.frame = CGRectMake(94, top + 6, w - 110, 22);
     self.pathLabel.frame = CGRectMake(94, top + 28, w - 110, 16);
+    if (self.picksFolder) {
+        CGFloat anchoBoton = 152;
+        self.pickButton.frame = CGRectMake(w - anchoBoton - 12, top + 9, anchoBoton, 36);
+        self.titleLabel.frame = CGRectMake(94, top + 6, w - 110 - anchoBoton, 22);
+        self.pathLabel.frame = CGRectMake(94, top + 28, w - 110 - anchoBoton, 16);
+    }
 
     self.quickBar.frame = CGRectMake(0, CGRectGetMaxY(self.topBar.frame), w, 56);
     CGFloat qx = 16;
@@ -257,6 +275,15 @@
 
 #pragma mark - Acciones
 
+- (void)pickTapped:(UIButton *)sender {
+    NSString *ruta = self.currentPath;
+    if (!ruta.length) return;
+    void (^callback)(NSString *) = self.onPickFolder;
+    [self dismissViewControllerAnimated:YES completion:^{
+        if (callback) callback(ruta);
+    }];
+}
+
 - (void)closeTapped:(UIButton *)sender {
     [self dismissViewControllerAnimated:YES completion:nil];
 }
@@ -343,6 +370,8 @@
     NSDictionary *e = self.visibleEntries[(NSUInteger)indexPath.row];
     if ([e[@"dir"] boolValue]) {
         [self loadPath:e[@"path"] pushHistory:YES];
+    } else if (self.picksFolder) {
+        [IRToast showIn:self.view message:@"Entra en una carpeta y pulsa «Usar esta carpeta»"];
     } else {
         [self importPath:e[@"path"]];
     }

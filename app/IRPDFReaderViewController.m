@@ -3,16 +3,24 @@
 #import "IRPDFOutline.h"
 #import "IRPDFThumbnails.h"
 #import "IRTheme.h"
+#import "IRSettings.h"
 #import "IRUtils.h"
 #import "IRLibrary.h"
 #import "IRDialog.h"
 
+// Dos formas de leer un PDF:
+//   - Vertical (por defecto): las paginas se apilan y se lee bajando, como un
+//     flujo continuo. Solo se crean las paginas cercanas a la pantalla.
+//   - Horizontal: una pagina a la vez, con gestos hacia los lados.
 @interface IRPDFReaderViewController () <UIScrollViewDelegate>
 
 @property (nonatomic, strong) UIScrollView *scrollView;
+@property (nonatomic, strong) UIView *pagesContainer;
 @property (nonatomic, strong) IRPDFPageView *pageView;
+@property (nonatomic, strong) NSMutableDictionary<NSNumber *, IRPDFPageView *> *pageViews;
+@property (nonatomic, strong) NSMutableArray<NSValue *> *pageFrames;
 @property (nonatomic, strong) UILabel *errorLabel;
-@property (nonatomic, strong) UIView *loadingView;
+@property (nonatomic, strong) UILabel *loadingLabel;
 @property (nonatomic, strong) NSArray<IRTOCItem *> *outline;
 @property (nonatomic, strong) IRPDFThumbnails *thumbnails;
 @property (nonatomic, assign) CGPDFDocumentRef pdf;
@@ -22,6 +30,31 @@
 @property (nonatomic, assign) BOOL unlocked;
 @property (nonatomic, assign) BOOL didInitialLayout;
 @property (nonatomic, assign) BOOL failed;
+@property (nonatomic, assign) BOOL aplicandoZoom;
+
+- (void)loadDocument;
+- (void)failWithMessage:(NSString *)mensaje;
+- (void)requestPassword;
+- (BOOL)shouldInvert;
+- (void)showPageAtIndex:(NSInteger)index restorePosition:(BOOL)restore;
+
+- (CGPoint)saveStateBeforeRelayout;
+- (void)restoreStateAfterRelayout:(CGPoint)estado;
+
+// Modo vertical
+- (void)rebuildPageFrames;
+- (void)updateVisiblePages;
+- (NSInteger)pageIndexAtCurrentPosition;
+- (void)scrollToPageVertically:(NSInteger)index animated:(BOOL)animated;
+- (CGRect)frameForPage:(NSInteger)index;
+
+// Modo horizontal
+- (void)configurePageForDisplay;
+- (void)adjustForSizeChange;
+- (void)centerContent;
+- (CGPoint)normalizedOffset;
+- (void)restoreNormalizedOffset:(CGPoint)normalizado;
+
 @end
 
 @implementation IRPDFReaderViewController
@@ -32,12 +65,44 @@
         _pageIndex = 0;
         _fitScale = 1;
         _outline = @[];
+        _pageViews = [NSMutableDictionary dictionary];
+        _pageFrames = [NSMutableArray array];
+        _scrollDirection = [IRSettings shared].pdfScrollDirection;
     }
     return self;
 }
 
 - (void)dealloc {
     if (_pdf) CGPDFDocumentRelease(_pdf);
+}
+
+- (BOOL)verticalMode {
+    return self.scrollDirection == IRPDFScrollDirectionVertical;
+}
+
+- (void)setScrollDirection:(IRPDFScrollDirection)scrollDirection {
+    if (_scrollDirection == scrollDirection) return;
+    _scrollDirection = scrollDirection;
+    if (self.isViewLoaded) [self refreshLayoutForDirection];
+}
+
+- (void)refreshLayoutForDirection {
+    NSInteger pagina = self.pageIndex;
+    if (self.verticalMode) {
+        [self.pageView removeFromSuperview];
+        self.pageView = nil;
+        self.scrollView.contentInset = UIEdgeInsetsZero;
+        self.scrollView.pagingEnabled = NO;
+        self.scrollView.directionalLockEnabled = YES;
+    } else {
+        for (IRPDFPageView *v in self.pageViews.allValues) [v removeFromSuperview];
+        [self.pageViews removeAllObjects];
+        [self.pageFrames removeAllObjects];
+        [self.pagesContainer removeFromSuperview];
+        self.pagesContainer = nil;
+        self.scrollView.contentInset = UIEdgeInsetsZero;
+    }
+    [self showPageAtIndex:pagina restorePosition:YES];
 }
 
 - (void)viewDidLoad {
@@ -52,8 +117,9 @@
     self.scrollView.showsVerticalScrollIndicator = NO;
     self.scrollView.decelerationRate = UIScrollViewDecelerationRateFast;
     self.scrollView.bouncesZoom = YES;
-    self.scrollView.maximumZoomScale = 5;
+    self.scrollView.maximumZoomScale = 4;
     self.scrollView.minimumZoomScale = 1;
+    self.scrollView.directionalLockEnabled = YES;
     [self.view addSubview:self.scrollView];
 
     UISwipeGestureRecognizer *izquierda =
@@ -87,14 +153,27 @@
     [self loadDocument];
 }
 
+#pragma mark - Disposicion
+
 - (void)viewDidLayoutSubviews {
     [super viewDidLayoutSubviews];
     self.scrollView.frame = self.view.bounds;
     self.errorLabel.frame = CGRectInset(self.view.bounds, 40, 80);
-    if (!self.didInitialLayout && self.pdf && self.pageView) {
+    if (!self.pdf || self.failed) return;
+
+    if (self.verticalMode) {
+        CGFloat anchoAnterior = self.pagesContainer.bounds.size.width;
+        CGFloat ancho = self.scrollView.bounds.size.width;
+        if (self.pageFrames.count == 0 || fabs(ancho - anchoAnterior) > 0.5) {
+            CGPoint guardado = [self saveStateBeforeRelayout];
+            [self rebuildPageFrames];
+            [self restoreStateAfterRelayout:guardado];
+        }
+        [self updateVisiblePages];
+    } else if (!self.didInitialLayout && self.pageView) {
         self.didInitialLayout = YES;
         [self configurePageForDisplay];
-    } else if (self.pdf && self.pageView) {
+    } else if (self.pageView) {
         [self adjustForSizeChange];
     }
 }
@@ -102,6 +181,117 @@
 - (void)viewWillDisappear:(BOOL)animated {
     [super viewWillDisappear:animated];
     [self saveProgressNow];
+}
+
+- (CGRect)frameForPage:(NSInteger)index {
+    if (index < 0 || index >= (NSInteger)self.pageFrames.count) return CGRectZero;
+    return [self.pageFrames[(NSUInteger)index] CGRectValue];
+}
+
+- (void)rebuildPageFrames {
+    [self.pageFrames removeAllObjects];
+    CGFloat ancho = MAX(160.0, self.scrollView.bounds.size.width);
+    if (self.scrollView.zoomScale > 1.001) {
+        // Al recolocar se vuelve a la escala de ajuste para no perder el sitio.
+        self.scrollView.zoomScale = 1;
+    }
+    self.pagesContainer.frame = CGRectMake(0, 0, ancho, 1);
+    [self.scrollView addSubview:self.pagesContainer];
+
+    CGFloat hueco = 16;
+    CGFloat y = 0;
+    for (NSInteger i = 0; i < self.pageCount; i++) {
+        CGSize tam = [IRPDFPageView pageSizeForDocument:self.pdf page:i + 1];
+        CGFloat alto = (tam.width > 1) ? ancho * (tam.height / tam.width) : ancho * 1.4;
+        alto = MAX(120.0, alto);
+        [self.pageFrames addObject:[NSValue valueWithCGRect:CGRectMake(0, y, ancho, alto)]];
+        y += alto + hueco;
+    }
+    self.pagesContainer.frame = CGRectMake(0, 0, ancho, MAX(1, y - hueco));
+    self.scrollView.contentSize = self.pagesContainer.bounds.size;
+
+    for (NSNumber *clave in self.pageViews) {
+        IRPDFPageView *v = self.pageViews[clave];
+        CGRect marco = [self frameForPage:clave.integerValue];
+        if (!CGRectIsEmpty(marco)) v.frame = marco;
+    }
+}
+
+- (CGPoint)saveStateBeforeRelayout {
+    NSInteger pagina = [self pageIndexAtCurrentPosition];
+    CGRect marco = [self frameForPage:pagina];
+    CGFloat escala = MAX(0.0001, self.scrollView.zoomScale);
+    CGFloat arriba = self.scrollView.contentOffset.y / escala;
+    CGFloat proporcion = (marco.size.height > 1) ? (arriba - marco.origin.y) / marco.size.height : 0;
+    return CGPointMake((CGFloat)pagina, MAX(0, MIN(1, proporcion)));
+}
+
+- (void)restoreStateAfterRelayout:(CGPoint)estado {
+    NSInteger pagina = (NSInteger)estado.x;
+    CGRect marco = [self frameForPage:pagina];
+    if (CGRectIsEmpty(marco)) return;
+    CGFloat y = marco.origin.y + estado.y * marco.size.height;
+    self.scrollView.contentOffset = CGPointMake(0, y);
+    self.pageIndex = pagina;
+}
+
+- (void)updateVisiblePages {
+    if (!self.verticalMode || self.pageFrames.count == 0) return;
+    CGFloat escala = MAX(0.0001, self.scrollView.zoomScale);
+    CGRect visible = self.scrollView.bounds;
+    visible.origin = CGPointMake(self.scrollView.contentOffset.x / escala,
+                                 self.scrollView.contentOffset.y / escala);
+    visible.size = CGSizeMake(visible.size.width / escala, visible.size.height / escala);
+    CGRect rango = CGRectInset(visible, 0, -visible.size.height * 1.5);
+
+    NSMutableSet *necesarias = [NSMutableSet set];
+    for (NSInteger i = 0; i < (NSInteger)self.pageFrames.count; i++) {
+        if (CGRectIntersectsRect([self frameForPage:i], rango)) [necesarias addObject:@(i)];
+    }
+
+    for (NSNumber *clave in [self.pageViews.allKeys copy]) {
+        if (![necesarias containsObject:clave]) {
+            [self.pageViews[clave] removeFromSuperview];
+            [self.pageViews removeObjectForKey:clave];
+        }
+    }
+    for (NSNumber *clave in necesarias) {
+        if (self.pageViews[clave]) continue;
+        NSInteger i = clave.integerValue;
+        CGRect marco = [self frameForPage:i];
+        if (CGRectIsEmpty(marco)) continue;
+        IRPDFPageView *v = [[IRPDFPageView alloc] initWithDocument:self.pdf
+                                                             page:i + 1
+                                                          inverts:[self shouldInvert]];
+        v.frame = marco;
+        [self.pagesContainer addSubview:v];
+        self.pageViews[clave] = v;
+    }
+
+    NSInteger actual = [self pageIndexAtCurrentPosition];
+    if (actual != self.pageIndex) {
+        self.pageIndex = actual;
+    }
+}
+
+- (NSInteger)pageIndexAtCurrentPosition {
+    if (self.pageFrames.count == 0) return 0;
+    CGFloat escala = MAX(0.0001, self.scrollView.zoomScale);
+    CGFloat y = (self.scrollView.contentOffset.y + self.scrollView.bounds.size.height * 0.32) / escala;
+    for (NSInteger i = 0; i < (NSInteger)self.pageFrames.count; i++) {
+        CGRect marco = [self frameForPage:i];
+        if (y >= marco.origin.y && y < CGRectGetMaxY(marco)) return i;
+    }
+    return (y <= 0) ? 0 : MAX(0, (NSInteger)self.pageFrames.count - 1);
+}
+
+- (void)scrollToPageVertically:(NSInteger)index animated:(BOOL)animated {
+    CGRect marco = [self frameForPage:index];
+    if (CGRectIsEmpty(marco)) return;
+    CGPoint destino = CGPointMake(0, marco.origin.y * MAX(1.0, self.scrollView.zoomScale));
+    CGFloat maxY = MAX(0, self.scrollView.contentSize.height - self.scrollView.bounds.size.height);
+    destino.y = MAX(0, MIN(maxY, destino.y));
+    [self.scrollView setContentOffset:destino animated:animated];
 }
 
 #pragma mark - Carga
@@ -144,6 +334,42 @@
     if (index >= self.pageCount) index = self.pageCount - 1;
     self.pageIndex = index;
 
+    if (self.verticalMode) {
+        self.scrollView.zoomScale = 1;
+        [self.pageViews removeAllObjects];
+        [self.pagesContainer removeFromSuperview];
+        self.pagesContainer = [[UIView alloc] init];
+        self.pagesContainer.backgroundColor = [UIColor clearColor];
+        [self.scrollView addSubview:self.pagesContainer];
+        [self rebuildPageFrames];
+        [self updateVisiblePages];
+
+        if (restore) {
+            IRProgress *p = self.document.progress;
+            double factor = p.zoom;
+            if (factor > 1.01 && factor < 6) {
+                self.aplicandoZoom = YES;
+                self.scrollView.zoomScale = MIN(4.0, MAX(1.0, factor));
+                self.aplicandoZoom = NO;
+            }
+            CGRect marco = [self frameForPage:self.pageIndex];
+            CGFloat y = marco.origin.y;
+            if (p.ratio > 0.0001) y += p.ratio * marco.size.height;
+            else if (p.offset.y > 0.0001) {
+                CGFloat maxY = MAX(1, self.scrollView.contentSize.height - self.scrollView.bounds.size.height);
+                y = p.offset.y * maxY;
+            }
+            CGFloat limite = MAX(0, self.scrollView.contentSize.height - self.scrollView.bounds.size.height);
+            self.scrollView.contentOffset = CGPointMake(0,
+                MAX(0, MIN(limite, y * MAX(1.0, self.scrollView.zoomScale))));
+        } else {
+            [self scrollToPageVertically:self.pageIndex animated:NO];
+        }
+        [self updateVisiblePages];
+        [self applyDisplaySettings];
+        return;
+    }
+
     [self.pageView removeFromSuperview];
     self.pageView = [[IRPDFPageView alloc] initWithDocument:self.pdf
                                                        page:index + 1
@@ -170,6 +396,51 @@
     }
     [self applyDisplaySettings];
 }
+
+- (void)failWithMessage:(NSString *)mensaje {
+    self.failed = YES;
+    self.errorLabel.text = mensaje;
+    self.errorLabel.hidden = NO;
+    [self.scrollView removeFromSuperview];
+    [self.view addSubview:self.errorLabel];
+    if (self.onFailure) self.onFailure();
+}
+
+#pragma mark - Contraseña
+
+- (void)requestPassword {
+    if (self.unlocked || !self.pdf) return;
+    IRDialog *dialogo = [IRDialog alertWithTitle:@"PDF protegido"
+                                         message:@"Este documento necesita una contraseña para abrirse."];
+    dialogo.dismissOnTapOutside = NO;
+    UITextField *campo = [dialogo addTextFieldWithPlaceholder:@"Contraseña" text:@"" secure:YES];
+    [dialogo addAction:@"Cancelar" style:IRDialogActionStyleCancel handler:^{
+        if (self.onFailure) self.onFailure();
+    }];
+    [dialogo addAction:@"Abrir" style:IRDialogActionStyleSelected handler:^{
+        NSString *texto = campo.text ?: @"";
+        if (CGPDFDocumentUnlockWithPassword(self.pdf, texto.UTF8String)) {
+            self.unlocked = YES;
+            self.pageCount = (NSInteger)CGPDFDocumentGetNumberOfPages(self.pdf);
+            self.outline = [IRPDFOutline itemsForDocument:self.pdf];
+            [self showPageAtIndex:self.pageIndex restorePosition:YES];
+            [IRToast showIn:self.view message:@"PDF desbloqueado"];
+        } else {
+            IRDialog *error = [IRDialog alertWithTitle:@"Contraseña incorrecta"
+                                               message:@"Vuelve a intentarlo o cancela para salir."];
+            [error addAction:@"Cancelar" style:IRDialogActionStyleCancel handler:^{
+                if (self.onFailure) self.onFailure();
+            }];
+            [error addAction:@"Reintentar" style:IRDialogActionStyleSelected handler:^{
+                [self requestPassword];
+            }];
+            [error presentIn:self];
+        }
+    }];
+    [dialogo presentIn:self];
+}
+
+#pragma mark - Modo horizontal
 
 - (void)configurePageForDisplay {
     if (!self.pageView) return;
@@ -233,73 +504,42 @@
     return CGPointMake(MAX(0, MIN(1, x)), MAX(0, MIN(1, y)));
 }
 
-- (void)failWithMessage:(NSString *)mensaje {
-    self.failed = YES;
-    self.errorLabel.text = mensaje;
-    self.errorLabel.hidden = NO;
-    if (self.onFailure) self.onFailure();
-}
-
-#pragma mark - Contraseña
-
-- (void)requestPassword {
-    if (self.unlocked || !self.pdf) return;
-    IRDialog *dialogo = [IRDialog alertWithTitle:@"PDF protegido"
-                                         message:@"Este documento necesita una contraseña para abrirse."];
-    dialogo.dismissOnTapOutside = NO;
-    UITextField *campo = [dialogo addTextFieldWithPlaceholder:@"Contraseña" text:@"" secure:YES];
-    [dialogo addAction:@"Cancelar" style:IRDialogActionStyleCancel handler:^{
-        if (self.onFailure) self.onFailure();
-    }];
-    [dialogo addAction:@"Abrir" style:IRDialogActionStyleSelected handler:^{
-        NSString *texto = campo.text ?: @"";
-        if (CGPDFDocumentUnlockWithPassword(self.pdf, texto.UTF8String)) {
-            self.unlocked = YES;
-            self.pageCount = (NSInteger)CGPDFDocumentGetNumberOfPages(self.pdf);
-            self.outline = [IRPDFOutline itemsForDocument:self.pdf];
-            [self showPageAtIndex:self.pageIndex restorePosition:YES];
-            [IRToast showIn:self.view message:@"PDF desbloqueado"];
-        } else {
-            IRDialog *error = [IRDialog alertWithTitle:@"Contraseña incorrecta"
-                                               message:@"Vuelve a intentarlo o cancela para salir."];
-            [error addAction:@"Cancelar" style:IRDialogActionStyleCancel handler:^{
-                if (self.onFailure) self.onFailure();
-            }];
-            [error addAction:@"Reintentar" style:IRDialogActionStyleSelected handler:^{
-                [self requestPassword];
-            }];
-            [error presentIn:self];
-        }
-    }];
-    [dialogo presentIn:self];
-}
-
 #pragma mark - Gestos
 
 - (void)swipeLeft:(UISwipeGestureRecognizer *)gesto {
+    if (self.verticalMode) return;
     if (self.scrollView.zoomScale > self.scrollView.minimumZoomScale * 1.06) return;
-    if (self.pageIndex + 1 < self.pageCount) {
-        [self goToPage:self.pageIndex + 2];
-    }
+    if (self.pageIndex + 1 < self.pageCount) [self goToPage:self.pageIndex + 2];
 }
 
 - (void)swipeRight:(UISwipeGestureRecognizer *)gesto {
+    if (self.verticalMode) return;
     if (self.scrollView.zoomScale > self.scrollView.minimumZoomScale * 1.06) return;
-    if (self.pageIndex > 0) {
-        [self goToPage:self.pageIndex];
-    }
+    if (self.pageIndex > 0) [self goToPage:self.pageIndex];
 }
 
 - (void)doubleTapped:(UITapGestureRecognizer *)gesto {
+    if (self.verticalMode) {
+        if (self.scrollView.zoomScale > 1.02) {
+            [self.scrollView setZoomScale:1 animated:YES];
+        } else {
+            CGPoint p = [gesto locationInView:self.pagesContainer];
+            CGFloat objetivo = 2.2;
+            CGSize tam = CGSizeMake(self.scrollView.bounds.size.width / objetivo,
+                                    self.scrollView.bounds.size.height / objetivo);
+            [self.scrollView zoomToRect:CGRectMake(p.x - tam.width / 2, p.y - tam.height / 2,
+                                                   tam.width, tam.height) animated:YES];
+        }
+        return;
+    }
     if (!self.pageView) return;
     if (self.scrollView.zoomScale <= self.scrollView.minimumZoomScale * 1.08) {
         CGPoint p = [gesto locationInView:self.pageView];
         CGFloat objetivo = self.scrollView.minimumZoomScale * 2.4;
         CGSize tam = CGSizeMake(self.scrollView.bounds.size.width / objetivo,
                                 self.scrollView.bounds.size.height / objetivo);
-        CGRect rect = CGRectMake(p.x - tam.width / 2, p.y - tam.height / 2,
-                                 tam.width, tam.height);
-        [self.scrollView zoomToRect:rect animated:YES];
+        [self.scrollView zoomToRect:CGRectMake(p.x - tam.width / 2, p.y - tam.height / 2,
+                                               tam.width, tam.height) animated:YES];
     } else {
         [self.scrollView setZoomScale:self.scrollView.minimumZoomScale animated:YES];
     }
@@ -308,11 +548,19 @@
 #pragma mark - UIScrollViewDelegate
 
 - (UIView *)viewForZoomingInScrollView:(UIScrollView *)scrollView {
-    return self.pageView;
+    return self.verticalMode ? self.pagesContainer : self.pageView;
+}
+
+- (void)scrollViewDidScroll:(UIScrollView *)scrollView {
+    if (self.verticalMode) [self updateVisiblePages];
 }
 
 - (void)scrollViewDidZoom:(UIScrollView *)scrollView {
-    [self centerContent];
+    if (self.verticalMode) {
+        [self updateVisiblePages];
+    } else {
+        [self centerContent];
+    }
 }
 
 #pragma mark - IRReader
@@ -324,16 +572,34 @@
 - (void)saveProgressNow {
     if (!self.document || !self.pdf) return;
     IRProgress *p = self.document.progress;
-    p.page = self.pageIndex + 1;
     p.pageCount = self.pageCount;
-    p.zoom = (self.fitScale > 0) ? (self.scrollView.zoomScale / self.fitScale) : 1;
-    p.offset = [self normalizedOffset];
-    p.finished = (self.pageCount > 0 && self.pageIndex + 1 >= self.pageCount);
+
+    if (self.verticalMode) {
+        NSInteger idx = [self pageIndexAtCurrentPosition];
+        CGRect marco = [self frameForPage:idx];
+        CGFloat escala = MAX(0.0001, self.scrollView.zoomScale);
+        CGFloat arriba = self.scrollView.contentOffset.y / escala;
+        p.page = idx + 1;
+        p.index = idx;
+        p.ratio = (marco.size.height > 1)
+            ? MAX(0, MIN(1, (arriba - marco.origin.y) / marco.size.height)) : 0;
+        p.zoom = MAX(1.0, self.scrollView.zoomScale);
+        p.offset = [self normalizedOffset];
+        p.finished = (idx + 1 >= self.pageCount) && (p.ratio > 0.9);
+    } else {
+        p.page = self.pageIndex + 1;
+        p.index = self.pageIndex;
+        p.zoom = (self.fitScale > 0) ? (self.scrollView.zoomScale / self.fitScale) : 1;
+        p.offset = [self normalizedOffset];
+        p.ratio = 0;
+        p.finished = (self.pageCount > 0 && self.pageIndex + 1 >= self.pageCount);
+    }
     [[IRLibrary shared] save];
 }
 
 - (NSString *)pageLabel {
-    return [NSString stringWithFormat:@"Pág. %ld de %ld", (long)(self.pageIndex + 1), (long)self.pageCount];
+    return [NSString stringWithFormat:@"Pág. %ld de %ld",
+            (long)(self.pageIndex + 1), (long)self.pageCount];
 }
 
 - (NSInteger)pageCount { return _pageCount; }
@@ -342,6 +608,16 @@
 - (void)goToPage:(NSInteger)page {
     if (!self.pdf) return;
     NSInteger indice = MAX(1, MIN(self.pageCount, page)) - 1;
+
+    if (self.verticalMode) {
+        if (indice == self.pageIndex && self.pageViews.count) return;
+        [self saveProgressNow];
+        self.pageIndex = indice;
+        [self scrollToPageVertically:indice animated:YES];
+        [self updateVisiblePages];
+        return;
+    }
+
     if (indice == self.pageIndex && self.pageView) return;
     self.pageIndex = indice;
     [self saveProgressNow];
@@ -388,6 +664,7 @@
     self.view.backgroundColor = [IRTheme shared].readingBackground;
     self.scrollView.backgroundColor = [IRTheme shared].readingBackground;
     if (self.pageView) self.pageView.inverts = [self shouldInvert];
+    for (IRPDFPageView *v in self.pageViews.allValues) v.inverts = [self shouldInvert];
 }
 
 - (BOOL)isPaginated { return YES; }

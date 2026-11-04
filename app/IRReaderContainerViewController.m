@@ -51,6 +51,9 @@
 - (void)showSearch;
 - (void)searchReaderWithQuery:(NSString *)consulta;
 
+// Direccion de desplazamiento del PDF.
+- (void)showScrollDirectionSheet;
+
 @end
 
 @implementation IRReaderContainerViewController
@@ -365,6 +368,15 @@ shouldRecognizeSimultaneouslyWithGestureRecognizer:(UIGestureRecognizer *)otro {
                                                   style:IRDialogActionStyleDefault
                                                 handler:^{ [self showReadingSettings]; }]];
 
+    if ([self.reader isKindOfClass:[IRPDFReaderViewController class]]) {
+        BOOL vertical = ([IRSettings shared].pdfScrollDirection == IRPDFScrollDirectionVertical);
+        [acciones addObject:[IRDialogAction
+            actionWithTitle:[NSString stringWithFormat:@"Desplazamiento: %@",
+                             vertical ? @"vertical" : @"horizontal"]
+                      style:IRDialogActionStyleDefault
+                    handler:^{ [self showScrollDirectionSheet]; }]];
+    }
+
     [acciones addObject:[IRDialogAction actionWithTitle:@"Informacion del documento"
                                                   style:IRDialogActionStyleDefault
                                                 handler:^{ [self showInfo]; }]];
@@ -619,6 +631,36 @@ shouldRecognizeSimultaneouslyWithGestureRecognizer:(UIGestureRecognizer *)otro {
         [fuerte.reader goToPage:pagina];
         [fuerte refreshChrome];
     }];
+}
+
+- (void)showScrollDirectionSheet {
+    NSMutableArray *acciones = [NSMutableArray array];
+    IRPDFScrollDirection actual = [IRSettings shared].pdfScrollDirection;
+    NSArray *titulos = @[@"Vertical (flujo continuo)",
+                         @"Horizontal (página a página)"];
+
+    for (NSInteger i = 0; i < (NSInteger)titulos.count; i++) {
+        BOOL sel = ((NSInteger)actual == i);
+        NSString *titulo = sel ? [@"\u2713 " stringByAppendingString:titulos[(NSUInteger)i]]
+                               : titulos[(NSUInteger)i];
+        [acciones addObject:[IRDialogAction actionWithTitle:titulo
+                                                      style:(sel ? IRDialogActionStyleSelected
+                                                                 : IRDialogActionStyleDefault)
+                                                    handler:^{
+            [IRSettings shared].pdfScrollDirection = (IRPDFScrollDirection)i;
+            [[IRSettings shared] save];
+            if ([self.reader isKindOfClass:[IRPDFReaderViewController class]]) {
+                [(IRPDFReaderViewController *)self.reader setScrollDirection:(IRPDFScrollDirection)i];
+            }
+            [self refreshChrome];
+            [IRToast showIn:self.view message:(i == 0 ? @"Desplazamiento vertical"
+                                                      : @"Desplazamiento horizontal")];
+        }]];
+    }
+    [acciones addObject:[IRDialogAction actionWithTitle:@"Cancelar"
+                                                  style:IRDialogActionStyleCancel
+                                                handler:nil]];
+    [IRDialog showSheetIn:self title:@"Desplazamiento del PDF" actions:acciones];
 }
 
 - (void)showReadingSettings {

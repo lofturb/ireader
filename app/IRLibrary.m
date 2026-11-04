@@ -6,6 +6,7 @@ NSString * const IRLibraryDidChangeNotification = @"IRLibraryDidChangeNotificati
 @interface IRLibrary ()
 @property (nonatomic, strong) NSMutableArray<IRDocument *> *mutableDocuments;
 @property (nonatomic, strong) NSMutableArray<NSString *> *mutableCollections;
+@property (nonatomic, strong) NSMutableArray<NSDictionary *> *mutableFolderLibraries;
 @property (nonatomic, strong) NSMutableDictionary<NSString *, NSNumber *> *dailySeconds;
 @end
 
@@ -26,6 +27,7 @@ NSString * const IRLibraryDidChangeNotification = @"IRLibraryDidChangeNotificati
     if (self) {
         _mutableDocuments = [NSMutableArray array];
         _mutableCollections = [NSMutableArray array];
+        _mutableFolderLibraries = [NSMutableArray array];
         _dailySeconds = [NSMutableDictionary dictionary];
     }
     return self;
@@ -33,6 +35,7 @@ NSString * const IRLibraryDidChangeNotification = @"IRLibraryDidChangeNotificati
 
 - (NSArray<IRDocument *> *)documents { return [self.mutableDocuments copy]; }
 - (NSArray<NSString *> *)collections { return [self.mutableCollections copy]; }
+- (NSArray<NSDictionary *> *)folderLibraries { return [self.mutableFolderLibraries copy]; }
 
 - (void)load {
     NSString *ruta = [IRUtils libraryFile];
@@ -49,9 +52,21 @@ NSString * const IRLibraryDidChangeNotification = @"IRLibraryDidChangeNotificati
     if ([objeto isKindOfClass:[NSDictionary class]]) {
         docs = objeto[@"documents"];
         NSArray *cols = objeto[@"collections"];
+        NSArray *libs = objeto[@"libraries"];
         NSDictionary *diario = objeto[@"daily"];
         if ([cols isKindOfClass:[NSArray class]]) {
             for (id c in cols) if ([c isKindOfClass:[NSString class]]) [self.mutableCollections addObject:c];
+        }
+        if ([libs isKindOfClass:[NSArray class]]) {
+            for (id l in libs) {
+                if (![l isKindOfClass:[NSDictionary class]]) continue;
+                NSString *nombre = l[@"name"];
+                NSString *ruta = l[@"path"];
+                if ([nombre isKindOfClass:[NSString class]] && [ruta isKindOfClass:[NSString class]] &&
+                    nombre.length && ruta.length) {
+                    [self.mutableFolderLibraries addObject:@{@"name": nombre, @"path": ruta}];
+                }
+            }
         }
         if ([diario isKindOfClass:[NSDictionary class]]) {
             [diario enumerateKeysAndObjectsUsingBlock:^(id key, id value, BOOL *stop) {
@@ -82,6 +97,7 @@ NSString * const IRLibraryDidChangeNotification = @"IRLibraryDidChangeNotificati
         @"version": @1,
         @"documents": docs,
         @"collections": self.mutableCollections ?: @[],
+        @"libraries": self.mutableFolderLibraries ?: @[],
         @"daily": self.dailySeconds ?: @{}
     };
     NSData *datos = [NSJSONSerialization dataWithJSONObject:raiz
@@ -189,6 +205,66 @@ NSString * const IRLibraryDidChangeNotification = @"IRLibraryDidChangeNotificati
                                 (r == NSOrderedDescending ? NSOrderedAscending : NSOrderedSame));
     }];
     return copia;
+}
+
+#pragma mark - Bibliotecas de carpeta
+
+- (void)addFolderLibraryNamed:(NSString *)name path:(NSString *)path {
+    NSString *n = [name stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    if (!n.length || !path.length) return;
+    NSString *normal = [path stringByStandardizingPath];
+    for (NSDictionary *lib in self.mutableFolderLibraries) {
+        if ([lib[@"name"] isEqualToString:n]) {
+            NSUInteger idx = [self.mutableFolderLibraries indexOfObject:lib];
+            if (idx != NSNotFound) {
+                self.mutableFolderLibraries[idx] = @{@"name": n, @"path": normal};
+            }
+            [self save];
+            [self notify];
+            return;
+        }
+    }
+    [self.mutableFolderLibraries addObject:@{@"name": n, @"path": normal}];
+    [self save];
+    [self notify];
+}
+
+- (void)removeFolderLibraryNamed:(NSString *)name {
+    if (!name.length) return;
+    for (NSDictionary *lib in [self.mutableFolderLibraries copy]) {
+        if ([lib[@"name"] isEqualToString:name]) {
+            [self.mutableFolderLibraries removeObject:lib];
+        }
+    }
+    [self save];
+    [self notify];
+}
+
+- (NSString *)pathForFolderLibraryNamed:(NSString *)name {
+    for (NSDictionary *lib in self.mutableFolderLibraries) {
+        if ([lib[@"name"] isEqualToString:name]) return lib[@"path"];
+    }
+    return nil;
+}
+
+- (IRDocument *)indexDocumentAtPath:(NSString *)path {
+    if (!path.length) return nil;
+    IRDocument *existente = [self documentWithPath:path];
+    if (existente) return existente;
+    NSDictionary *attrs = [[NSFileManager defaultManager] attributesOfItemAtPath:path error:NULL];
+    if (!attrs) return nil;
+    IRDocument *doc = [[IRDocument alloc] init];
+    doc.path = [path stringByStandardizingPath];
+    doc.title = [[doc.path lastPathComponent] stringByDeletingPathExtension];
+    doc.author = @"";
+    doc.type = [IRUtils typeForPath:doc.path];
+    doc.fileSize = [attrs[NSFileSize] unsignedLongLongValue];
+    doc.addedAt = [NSDate date];
+    doc.lastOpenedAt = [NSDate date];
+    doc.coverSeed = (NSUInteger)([[IRUtils sha1OfString:doc.path] hash] % 997);
+    doc.identifier = [[NSUUID UUID] UUIDString];
+    [self.mutableDocuments addObject:doc];
+    return doc;
 }
 
 - (void)addCollection:(NSString *)name {

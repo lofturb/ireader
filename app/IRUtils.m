@@ -181,6 +181,30 @@
     return t != IRDocumentTypeUnknown && t != IRDocumentTypeArchive;
 }
 
+#pragma mark - Carpetas
+
++ (NSArray<NSString *> *)supportedFilesInFolder:(NSString *)path recursive:(BOOL)recursive {
+    if (!path.length) return @[];
+    NSMutableArray *resultado = [NSMutableArray array];
+    NSFileManager *fm = [NSFileManager defaultManager];
+    NSArray *contenido = [fm contentsOfDirectoryAtPath:path error:NULL];
+    for (NSString *nombre in contenido) {
+        if ([nombre hasPrefix:@"."]) continue;
+        NSString *ruta = [path stringByAppendingPathComponent:nombre];
+        BOOL esCarpeta = NO;
+        if (![fm fileExistsAtPath:ruta isDirectory:&esCarpeta]) continue;
+        if (esCarpeta) {
+            if (recursive) [resultado addObjectsFromArray:[self supportedFilesInFolder:ruta recursive:YES]];
+        } else if ([self isSupportedPath:ruta]) {
+            [resultado addObject:ruta];
+        }
+    }
+    [resultado sortUsingComparator:^NSComparisonResult(NSString *a, NSString *b) {
+        return [self naturalCompare:[a lastPathComponent] with:[b lastPathComponent]];
+    }];
+    return resultado;
+}
+
 #pragma mark - Texto y fechas
 
 + (NSString *)fileSizeString:(unsigned long long)bytes {

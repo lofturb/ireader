@@ -10,6 +10,8 @@ extern NSString * const IRLibraryDidChangeNotification;
 
 @property (nonatomic, readonly) NSArray<IRDocument *> *documents;
 @property (nonatomic, readonly) NSArray<NSString *> *collections;
+// Bibliotecas creadas a partir de una carpeta: @{@"name": nombre, @"path": ruta}.
+@property (nonatomic, readonly) NSArray<NSDictionary *> *folderLibraries;
 
 - (void)load;
 - (void)save;
@@ -24,6 +26,13 @@ extern NSString * const IRLibraryDidChangeNotification;
 - (NSArray<IRDocument *> *)sortedDocuments:(NSArray<IRDocument *> *)docs
                                       key:(IRLibrarySortKey)key
                                 ascending:(BOOL)ascending;
+
+// Bibliotecas de carpeta.
+- (void)addFolderLibraryNamed:(NSString *)name path:(NSString *)path;
+- (void)removeFolderLibraryNamed:(NSString *)name;
+- (NSString *)pathForFolderLibraryNamed:(NSString *)name;
+// Registra un archivo que vive fuera de la carpeta de importados sin copiarlo.
+- (IRDocument *)indexDocumentAtPath:(NSString *)path;
 
 - (void)addCollection:(NSString *)name;
 - (void)deleteCollection:(NSString *)name;

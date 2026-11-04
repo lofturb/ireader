@@ -6,6 +6,7 @@
 #import "IRWiFiViewController.h"
 #import "IRReaderContainerViewController.h"
 #import "IRLibrary.h"
+#import "IRImportManager.h"
 #import "IRTheme.h"
 #import "IRSettings.h"
 #import "IRIcons.h"
@@ -79,6 +80,9 @@
 @property (nonatomic, assign) IRLibraryFilter selectedFilter;
 @property (nonatomic, copy) NSString *selectedCollection;
 @property (nonatomic, assign) BOOL openedLastBook;
+- (void)showFolderPicker;
+- (void)createFolderLibraryAtPath:(NSString *)path;
+- (NSUInteger)syncFolderLibraryNamed:(NSString *)nombre path:(NSString *)path;
 @end
 
 @implementation IRRootViewController
@@ -182,10 +186,25 @@
 
 - (void)reloadSidebar {
     NSMutableArray *colecciones = [NSMutableArray array];
+    NSMutableSet *nombresDeBibliotecas = [NSMutableSet set];
+    for (NSDictionary *lib in [IRLibrary shared].folderLibraries) {
+        if ([lib[@"name"] isKindOfClass:[NSString class]]) [nombresDeBibliotecas addObject:lib[@"name"]];
+    }
     for (NSString *nombre in [IRLibrary shared].collections) {
+        if ([nombresDeBibliotecas containsObject:nombre]) continue;
         [colecciones addObject:@{@"title": nombre, @"glyph": @(IRGlyphFolder), @"kind": @"collection"}];
     }
     [colecciones addObject:@{@"title": @"Nueva colección", @"glyph": @(IRGlyphPlus), @"kind": @"newcollection"}];
+
+    NSMutableArray *bibliotecas = [NSMutableArray array];
+    for (NSDictionary *lib in [IRLibrary shared].folderLibraries) {
+        [bibliotecas addObject:@{@"title": lib[@"name"] ?: @"Biblioteca",
+                                 @"glyph": @(IRGlyphFolder),
+                                 @"kind": @"folderlibrary",
+                                 @"path": lib[@"path"] ?: @""}];
+    }
+    [bibliotecas addObject:@{@"title": @"Nueva biblioteca", @"glyph": @(IRGlyphPlus),
+                             @"kind": @"newfolderlibrary"}];
 
     self.sections = @[
         @{@"title": @"BIBLIOTECA", @"items": @[
@@ -194,6 +213,7 @@
             @{@"title": @"Leyendo", @"glyph": @(IRGlyphBook), @"kind": @"reading"},
             @{@"title": @"Terminados", @"glyph": @(IRGlyphCheck), @"kind": @"finished"}
         ]},
+        @{@"title": @"BIBLIOTECAS", @"items": bibliotecas},
         @{@"title": @"COLECCIONES", @"items": colecciones},
         @{@"title": @"HERRAMIENTAS", @"items": @[
             @{@"title": @"Archivos", @"glyph": @(IRGlyphFolder), @"kind": @"files"},
@@ -213,7 +233,8 @@
         for (NSInteger r = 0; r < (NSInteger)items.count; r++) {
             NSDictionary *item = items[(NSUInteger)r];
             NSString *kind = item[@"kind"];
-            if (self.selectedFilter == IRLibraryFilterCollection && [kind isEqualToString:@"collection"] &&
+            if (self.selectedFilter == IRLibraryFilterCollection &&
+                ([kind isEqualToString:@"collection"] || [kind isEqualToString:@"folderlibrary"]) &&
                 [item[@"title"] isEqualToString:self.selectedCollection]) {
                 objetivo = [NSIndexPath indexPathForRow:r inSection:s];
                 break;
@@ -289,7 +310,7 @@
     else if ([kind isEqualToString:@"favorites"]) seleccionado = (self.selectedFilter == IRLibraryFilterFavorites);
     else if ([kind isEqualToString:@"reading"]) seleccionado = (self.selectedFilter == IRLibraryFilterReading);
     else if ([kind isEqualToString:@"finished"]) seleccionado = (self.selectedFilter == IRLibraryFilterFinished);
-    else if ([kind isEqualToString:@"collection"]) {
+    else if ([kind isEqualToString:@"collection"] || [kind isEqualToString:@"folderlibrary"]) {
         seleccionado = (self.selectedFilter == IRLibraryFilterCollection &&
                         [item[@"title"] isEqualToString:self.selectedCollection]);
     }
@@ -320,6 +341,16 @@
         self.selectedFilter = IRLibraryFilterFinished;
         self.selectedCollection = @"";
         [self.libraryVC setFilter:IRLibraryFilterFinished collection:nil title:@"Terminados"];
+    } else if ([kind isEqualToString:@"folderlibrary"]) {
+        self.selectedFilter = IRLibraryFilterCollection;
+        self.selectedCollection = titulo;
+        [self syncFolderLibraryNamed:titulo path:item[@"path"]];
+        [self.libraryVC setFilter:IRLibraryFilterCollection collection:titulo title:titulo];
+    } else if ([kind isEqualToString:@"newfolderlibrary"]) {
+        [tableView deselectRowAtIndexPath:indexPath animated:YES];
+        [self restoreSidebarSelection];
+        [self showFolderPicker];
+        return;
     } else if ([kind isEqualToString:@"collection"]) {
         self.selectedFilter = IRLibraryFilterCollection;
         self.selectedCollection = titulo;
@@ -362,7 +393,67 @@
         [self presentViewController:ajustes animated:YES completion:nil];
         return;
     }
+    [self.sidebarTable reloadData];
     [self restoreSidebarSelection];
+}
+
+#pragma mark - Bibliotecas de carpeta
+
+- (void)showFolderPicker {
+    IRFileBrowserViewController *navegador = [[IRFileBrowserViewController alloc] init];
+    navegador.startPath = [IRUtils documentsPath];
+    navegador.picksFolder = YES;
+    navegador.onPickFolder = ^(NSString *ruta) {
+        [self createFolderLibraryAtPath:ruta];
+    };
+    navegador.modalPresentationStyle = UIModalPresentationFullScreen;
+    [self presentViewController:navegador animated:YES completion:nil];
+}
+
+- (void)createFolderLibraryAtPath:(NSString *)path {
+    if (!path.length) return;
+    NSString *nombre = [path lastPathComponent];
+    if (!nombre.length) nombre = @"Biblioteca";
+    IRLibrary *biblioteca = [IRLibrary shared];
+    [biblioteca addFolderLibraryNamed:nombre path:path];
+    [biblioteca addCollection:nombre];
+
+    NSUInteger nuevos = [self syncFolderLibraryNamed:nombre path:path];
+
+    self.selectedFilter = IRLibraryFilterCollection;
+    self.selectedCollection = nombre;
+    [self.libraryVC setFilter:IRLibraryFilterCollection collection:nombre title:nombre];
+    [self reloadSidebar];
+    [self.libraryVC reloadLibrary];
+
+    NSString *mensaje = (nuevos > 0)
+        ? [NSString stringWithFormat:@"Biblioteca «%@» con %lu documento%@",
+           nombre, (unsigned long)nuevos, nuevos == 1 ? @"" : @"s"]
+        : [NSString stringWithFormat:@"Biblioteca «%@» actualizada", nombre];
+    [IRToast showIn:self.view message:mensaje];
+}
+
+// Registra los archivos de la carpeta que aun no esten en la biblioteca y los
+// agrupa en la coleccion con el mismo nombre. Devuelve cuantos son nuevos.
+- (NSUInteger)syncFolderLibraryNamed:(NSString *)nombre path:(NSString *)path {
+    if (!nombre.length || !path.length) return 0;
+    IRLibrary *biblioteca = [IRLibrary shared];
+    NSArray *archivos = [IRUtils supportedFilesInFolder:path recursive:YES];
+    NSMutableArray *recienLlegados = [NSMutableArray array];
+    for (NSString *ruta in archivos) {
+        BOOL existia = ([biblioteca documentWithPath:ruta] != nil);
+        IRDocument *doc = [biblioteca indexDocumentAtPath:ruta];
+        if (!doc) continue;
+        if (![doc.collections containsObject:nombre]) [doc.collections addObject:nombre];
+        if (!existia) [recienLlegados addObject:doc];
+    }
+    [biblioteca save];
+    [[NSNotificationCenter defaultCenter] postNotificationName:IRLibraryDidChangeNotification
+                                                        object:biblioteca];
+    for (IRDocument *doc in recienLlegados) {
+        [[IRImportManager shared] refreshMetadataForDocument:doc];
+    }
+    return recienLlegados.count;
 }
 
 #pragma mark - Acciones

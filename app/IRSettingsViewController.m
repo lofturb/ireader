@@ -104,7 +104,7 @@
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
     switch (section) {
         case 0: return 2;
-        case 1: return 8;
+        case 1: return 9;
         case 2: return 5;
         case 3: return 2;
         case 4: return 1;
@@ -257,7 +257,7 @@
                 celda.accessoryView = sw;
                 break;
             }
-            default: {
+            case 7: {
                 celda.textLabel.text = @"Diseño original del documento";
                 UISwitch *sw = [[UISwitch alloc] init];
                 sw.on = ajustes.originalLayout;
@@ -265,6 +265,14 @@
                 sw.tag = tag;
                 [sw addTarget:self action:@selector(switchChanged:) forControlEvents:UIControlEventValueChanged];
                 celda.accessoryView = sw;
+                break;
+            }
+            default: {
+                celda.textLabel.text = @"Desplazamiento del PDF";
+                celda.detailTextLabel.text = (ajustes.pdfScrollDirection == IRPDFScrollDirectionVertical)
+                    ? @"Vertical" : @"Horizontal";
+                celda.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+                celda.selectionStyle = UITableViewCellSelectionStyleDefault;
                 break;
             }
         }
@@ -405,6 +413,27 @@
             }]];
         }
         [IRDialog showSheetIn:self title:@"Tipografía" actions:acciones];
+        return;
+    }
+
+    if (indexPath.section == 1 && indexPath.row == 8) {
+        NSArray *titulos = @[@"Vertical (flujo continuo)", @"Horizontal (página a página)"];
+        NSMutableArray *acciones = [NSMutableArray array];
+        for (NSInteger i = 0; i < (NSInteger)titulos.count; i++) {
+            BOOL sel = ((NSInteger)ajustes.pdfScrollDirection == i);
+            NSString *titulo = sel ? [@"\u2713 " stringByAppendingString:titulos[(NSUInteger)i]]
+                                   : titulos[(NSUInteger)i];
+            [acciones addObject:[IRDialogAction actionWithTitle:titulo
+                                                          style:(sel ? IRDialogActionStyleSelected
+                                                                     : IRDialogActionStyleDefault)
+                                                        handler:^{
+                ajustes.pdfScrollDirection = (IRPDFScrollDirection)i;
+                [ajustes save];
+                [tableView reloadData];
+                [IRToast showIn:self.view message:(i == 0 ? @"PDF vertical" : @"PDF horizontal")];
+            }]];
+        }
+        [IRDialog showSheetIn:self title:@"Desplazamiento del PDF" actions:acciones];
         return;
     }
 

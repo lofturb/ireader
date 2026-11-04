@@ -38,8 +38,12 @@
 }
 
 - (CGSize)pageSize {
-    if (!self.document) return CGSizeMake(612, 792);
-    CGPDFPageRef pagina = CGPDFDocumentGetPage(self.document, (size_t)self.pageNumber);
+    return [IRPDFPageView pageSizeForDocument:self.document page:self.pageNumber];
+}
+
++ (CGSize)pageSizeForDocument:(CGPDFDocumentRef)document page:(NSInteger)page {
+    if (!document) return CGSizeMake(612, 792);
+    CGPDFPageRef pagina = CGPDFDocumentGetPage(document, (size_t)MAX(1, page));
     if (!pagina) return CGSizeMake(612, 792);
     CGRect caja = CGPDFPageGetBoxRect(pagina, kCGPDFCropBox);
     if (caja.size.width <= 0 || caja.size.height <= 0) {
@@ -73,6 +77,10 @@
         if (!pagina) return;
 
         CGContextSaveGState(ctx);
+        // UIKit entrega el contexto con el eje Y invertido: hay que deshacer
+        // esa inversion o la pagina se dibuja del reves (girada 180 grados).
+        CGContextTranslateCTM(ctx, 0, self.bounds.size.height);
+        CGContextScaleCTM(ctx, 1, -1);
         CGAffineTransform transformacion =
             CGPDFPageGetDrawingTransform(pagina, kCGPDFCropBox, self.bounds, 0, true);
         CGContextConcatCTM(ctx, transformacion);

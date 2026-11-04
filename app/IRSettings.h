@@ -12,6 +12,13 @@ typedef NS_ENUM(NSInteger, IRLibraryViewMode) {
     IRLibraryViewModeList
 };
 
+// Como se recorre un PDF: en vertical (flujo continuo, se baja leyendo) o
+// en horizontal (una pagina a la vez, con gestos laterales).
+typedef NS_ENUM(NSInteger, IRPDFScrollDirection) {
+    IRPDFScrollDirectionVertical = 0,
+    IRPDFScrollDirectionHorizontal
+};
+
 typedef NS_ENUM(NSInteger, IRLibrarySortKey) {
     IRLibrarySortRecent = 0,
     IRLibrarySortTitle,
@@ -41,6 +48,7 @@ typedef NS_ENUM(NSInteger, IRLibrarySortKey) {
 @property (nonatomic, assign) BOOL keepAwake;
 // YES = renderiza el documento tal cual es (CSS y fuentes originales).
 @property (nonatomic, assign) BOOL originalLayout;
+@property (nonatomic, assign) IRPDFScrollDirection pdfScrollDirection;
 
 @property (nonatomic, assign) IRPageTurnStyle pageTurnStyle;
 @property (nonatomic, assign) IRLibraryViewMode libraryView;

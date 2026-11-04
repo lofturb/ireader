@@ -9,6 +9,9 @@
                             page:(NSInteger)page
                          inverts:(BOOL)inverts;
 
+// Tamano real de una pagina (aplicando su rotacion), sin crear la vista.
++ (CGSize)pageSizeForDocument:(CGPDFDocumentRef)document page:(NSInteger)page;
+
 @property (nonatomic, assign) NSInteger pageNumber;
 @property (nonatomic, assign) BOOL inverts;
 @property (nonatomic, readonly) CGSize pageSize;

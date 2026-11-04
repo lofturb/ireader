@@ -47,6 +47,11 @@
 + (UIImage *)downsampleImageFromData:(NSData *)data maxPixelSize:(CGFloat)maxPixel;
 + (UIImage *)imageWithColor:(UIColor *)color size:(CGSize)size;
 
+// --- Carpetas ---
+// Devuelve los archivos que IReader sabe abrir dentro de una carpeta. Con
+// recursive:YES baja por las subcarpetas (hasta una profundidad razonable).
++ (NSArray<NSString *> *)supportedFilesInFolder:(NSString *)path recursive:(BOOL)recursive;
+
 // --- Varios ---
 + (BOOL)isLandscape;
 + (CGFloat)statusBarHeight;
