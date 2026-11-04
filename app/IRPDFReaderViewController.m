@@ -32,6 +32,9 @@
 @property (nonatomic, assign) BOOL failed;
 @property (nonatomic, assign) BOOL aplicandoZoom;
 @property (nonatomic, assign) BOOL restaurandoPosicion;
+// Queda activo hasta que la vista aparece: ahi se vuelve a aplicar la posicion
+// guardada con el tamano definitivo de la pantalla.
+@property (nonatomic, assign) BOOL pendingRestore;
 
 - (void)loadDocument;
 - (void)failWithMessage:(NSString *)mensaje;
@@ -39,6 +42,7 @@
 - (BOOL)shouldInvert;
 - (void)applyScrollLock;
 - (void)enforceScrollLock;
+- (void)applySavedPosition;
 - (void)showPageAtIndex:(NSInteger)index restorePosition:(BOOL)restore;
 
 - (CGPoint)saveStateBeforeRelayout;
@@ -175,12 +179,26 @@
             [self restoreStateAfterRelayout:guardado];
         }
         [self updateVisiblePages];
-    } else if (!self.didInitialLayout && self.pageView) {
-        self.didInitialLayout = YES;
-        [self configurePageForDisplay];
     } else if (self.pageView) {
-        [self adjustForSizeChange];
+        BOOL primero = !self.didInitialLayout;
+        self.didInitialLayout = YES;
+        if (primero) {
+            [self configurePageForDisplay];
+            if (self.pendingRestore) [self applySavedPosition];
+        } else {
+            [self adjustForSizeChange];
+        }
     }
+}
+
+- (void)viewDidAppear:(BOOL)animated {
+    [super viewDidAppear:animated];
+    if (!self.pendingRestore || !self.pdf) return;
+    self.pendingRestore = NO;
+    // Ultima pasada con la vista ya visible y el tamano definitivo.
+    [self applySavedPosition];
+    if (self.verticalMode) [self updateVisiblePages];
+    [self applyDisplaySettings];
 }
 
 - (void)viewWillDisappear:(BOOL)animated {
@@ -341,6 +359,7 @@
     if (index < 0) index = 0;
     if (index >= self.pageCount) index = self.pageCount - 1;
     self.pageIndex = index;
+    self.pendingRestore = restore;
 
     if (self.verticalMode) {
         self.restaurandoPosicion = YES;
@@ -353,22 +372,7 @@
         [self rebuildPageFrames];
 
         if (restore) {
-            IRProgress *p = self.document.progress;
-            double factor = p.zoom;
-            if (factor > 1.01 && factor < 6) {
-                self.aplicandoZoom = YES;
-                self.scrollView.zoomScale = MIN(4.0, MAX(1.0, factor));
-                self.aplicandoZoom = NO;
-            }
-            CGRect marco = [self frameForPage:self.pageIndex];
-            // La pagina guardada manda: se restaura su parte proporcional. No
-            // se usa el desplazamiento global porque puede caer en otra pagina
-            // y mandar al principio o al final del documento.
-            CGFloat proporcion = MAX(0.0, MIN(1.0, p.ratio));
-            CGFloat y = marco.origin.y + proporcion * marco.size.height;
-            CGFloat limite = MAX(0, self.scrollView.contentSize.height - self.scrollView.bounds.size.height);
-            self.scrollView.contentOffset = CGPointMake(0,
-                MAX(0, MIN(limite, y * MAX(1.0, self.scrollView.zoomScale))));
+            [self applySavedPosition];
         } else {
             [self scrollToPageVertically:self.pageIndex animated:NO];
         }
@@ -390,19 +394,64 @@
     [self configurePageForDisplay];
 
     if (restore) {
-        double factor = self.document.progress.zoom;
+        [self applySavedPosition];
+    }
+    [self applyDisplaySettings];
+}
+
+// Coloca la vista en la pagina y la parte de pagina guardadas. Se usa al
+// abrir el documento y otra vez cuando la vista ya esta visible, para que un
+// cambio de tamano durante la presentacion no mande al inicio o al final.
+- (void)applySavedPosition {
+    if (!self.pdf) return;
+    IRProgress *p = self.document.progress;
+    NSInteger pagina = MAX(0, MIN(self.pageCount - 1, p.page - 1));
+    BOOL anterior = self.restaurandoPosicion;
+    self.restaurandoPosicion = YES;
+    self.pageIndex = pagina;
+
+    if (self.verticalMode) {
+        CGRect marco = [self frameForPage:pagina];
+        if (!CGRectIsEmpty(marco)) {
+            double factor = p.zoom;
+            if (factor > 1.01 && factor < 6) {
+                self.aplicandoZoom = YES;
+                self.scrollView.zoomScale = MIN(4.0, MAX(1.0, factor));
+                self.aplicandoZoom = NO;
+            }
+            // La pagina guardada manda: se restaura su parte proporcional. No
+            // se usa el desplazamiento global porque puede caer en otra pagina
+            // y mandar al principio o al final del documento.
+            CGFloat proporcion = MAX(0.0, MIN(1.0, p.ratio));
+            CGFloat y = marco.origin.y + proporcion * marco.size.height;
+            CGFloat limite = MAX(0, self.scrollView.contentSize.height - self.scrollView.bounds.size.height);
+            self.scrollView.contentOffset = CGPointMake(0,
+                MAX(0, MIN(limite, y * MAX(1.0, self.scrollView.zoomScale))));
+        }
+    } else {
+        if (self.pageView && self.pageView.pageNumber != pagina + 1) {
+            [self.pageView removeFromSuperview];
+            self.pageView = [[IRPDFPageView alloc] initWithDocument:self.pdf
+                                                               page:pagina + 1
+                                                            inverts:[self shouldInvert]];
+            CGSize tam = self.pageView.pageSize;
+            self.pageView.frame = CGRectMake(0, 0, tam.width, tam.height);
+            [self.scrollView addSubview:self.pageView];
+            [self configurePageForDisplay];
+        }
+        double factor = p.zoom;
         if (factor > 1.01 && factor < 6) {
             self.scrollView.zoomScale = MIN(self.scrollView.maximumZoomScale,
                                             MAX(self.scrollView.minimumZoomScale,
                                                 self.fitScale * factor));
             [self centerContent];
         }
-        CGPoint guardado = self.document.progress.offset;
+        CGPoint guardado = p.offset;
         if (guardado.x > 0.001 || guardado.y > 0.001) {
             [self restoreNormalizedOffset:guardado];
         }
     }
-    [self applyDisplaySettings];
+    self.restaurandoPosicion = anterior;
 }
 
 - (void)failWithMessage:(NSString *)mensaje {
