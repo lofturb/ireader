@@ -49,6 +49,9 @@ typedef NS_ENUM(NSInteger, IRLibrarySortKey) {
 // YES = renderiza el documento tal cual es (CSS y fuentes originales).
 @property (nonatomic, assign) BOOL originalLayout;
 @property (nonatomic, assign) IRPDFScrollDirection pdfScrollDirection;
+// Bloquea el eje perpendicular al desplazamiento actual (evita que un gesto
+// lateral mueva la pagina mientras se lee en vertical).
+@property (nonatomic, assign) BOOL lockScrollAxis;
 
 @property (nonatomic, assign) IRPageTurnStyle pageTurnStyle;
 @property (nonatomic, assign) IRLibraryViewMode libraryView;

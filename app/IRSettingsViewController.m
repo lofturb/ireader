@@ -104,7 +104,7 @@
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
     switch (section) {
         case 0: return 2;
-        case 1: return 9;
+        case 1: return 10;
         case 2: return 5;
         case 3: return 2;
         case 4: return 1;
@@ -267,12 +267,22 @@
                 celda.accessoryView = sw;
                 break;
             }
-            default: {
+            case 8: {
                 celda.textLabel.text = @"Desplazamiento del PDF";
                 celda.detailTextLabel.text = (ajustes.pdfScrollDirection == IRPDFScrollDirectionVertical)
                     ? @"Vertical" : @"Horizontal";
                 celda.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
                 celda.selectionStyle = UITableViewCellSelectionStyleDefault;
+                break;
+            }
+            default: {
+                celda.textLabel.text = @"Bloquear desplazamiento lateral";
+                UISwitch *sw = [[UISwitch alloc] init];
+                sw.on = ajustes.lockScrollAxis;
+                sw.onTintColor = [IRTheme shared].accent;
+                sw.tag = tag;
+                [sw addTarget:self action:@selector(switchChanged:) forControlEvents:UIControlEventValueChanged];
+                celda.accessoryView = sw;
                 break;
             }
         }
@@ -524,6 +534,7 @@
         if (row == 5) a.readingJustify = sw.on;
         else if (row == 6) a.readingHyphenate = sw.on;
         else if (row == 7) a.originalLayout = sw.on;
+        else if (row == 9) a.lockScrollAxis = sw.on;
     } else if (section == 2) {
         if (row == 2) a.librarySortAscending = sw.on;
         else if (row == 3) a.showProgressBars = sw.on;

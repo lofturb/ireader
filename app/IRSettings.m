@@ -13,6 +13,7 @@ static NSString * const kReadingBrightness = @"readingBrightness";
 static NSString * const kKeepAwake = @"keepAwake";
 static NSString * const kOriginalLayout = @"originalLayout";
 static NSString * const kPDFScrollDirection = @"pdfScrollDirection";
+static NSString * const kLockScrollAxis = @"lockScrollAxis";
 static NSString * const kPageTurnStyle = @"pageTurnStyle";
 static NSString * const kLibraryView = @"libraryView";
 static NSString * const kLibrarySort = @"librarySort";
@@ -52,6 +53,7 @@ static NSString * const kStatsEnabled = @"statsEnabled";
         kKeepAwake: @NO,
         kOriginalLayout: @YES,
         kPDFScrollDirection: @(IRPDFScrollDirectionVertical),
+        kLockScrollAxis: @NO,
         kPageTurnStyle: @(IRPageTurnStyleSlide),
         kLibraryView: @(IRLibraryViewModeGrid),
         kLibrarySort: @(IRLibrarySortRecent),
@@ -80,6 +82,7 @@ static NSString * const kStatsEnabled = @"statsEnabled";
     _keepAwake = [d boolForKey:kKeepAwake];
     _originalLayout = [d boolForKey:kOriginalLayout];
     _pdfScrollDirection = (IRPDFScrollDirection)[d integerForKey:kPDFScrollDirection];
+    _lockScrollAxis = [d boolForKey:kLockScrollAxis];
     _pageTurnStyle = (IRPageTurnStyle)[d integerForKey:kPageTurnStyle];
     _libraryView = (IRLibraryViewMode)[d integerForKey:kLibraryView];
     _librarySort = (IRLibrarySortKey)[d integerForKey:kLibrarySort];
@@ -107,6 +110,7 @@ static NSString * const kStatsEnabled = @"statsEnabled";
     [d setBool:_keepAwake forKey:kKeepAwake];
     [d setBool:_originalLayout forKey:kOriginalLayout];
     [d setInteger:_pdfScrollDirection forKey:kPDFScrollDirection];
+    [d setBool:_lockScrollAxis forKey:kLockScrollAxis];
     [d setInteger:_pageTurnStyle forKey:kPageTurnStyle];
     [d setInteger:_libraryView forKey:kLibraryView];
     [d setInteger:_librarySort forKey:kLibrarySort];

@@ -31,11 +31,14 @@
 @property (nonatomic, assign) BOOL didInitialLayout;
 @property (nonatomic, assign) BOOL failed;
 @property (nonatomic, assign) BOOL aplicandoZoom;
+@property (nonatomic, assign) BOOL restaurandoPosicion;
 
 - (void)loadDocument;
 - (void)failWithMessage:(NSString *)mensaje;
 - (void)requestPassword;
 - (BOOL)shouldInvert;
+- (void)applyScrollLock;
+- (void)enforceScrollLock;
 - (void)showPageAtIndex:(NSInteger)index restorePosition:(BOOL)restore;
 
 - (CGPoint)saveStateBeforeRelayout;
@@ -82,6 +85,7 @@
 
 - (void)setScrollDirection:(IRPDFScrollDirection)scrollDirection {
     if (_scrollDirection == scrollDirection) return;
+    if (self.isViewLoaded) [self saveProgressNow];
     _scrollDirection = scrollDirection;
     if (self.isViewLoaded) [self refreshLayoutForDirection];
 }
@@ -121,6 +125,7 @@
     self.scrollView.minimumZoomScale = 1;
     self.scrollView.directionalLockEnabled = YES;
     [self.view addSubview:self.scrollView];
+    [self applyScrollLock];
 
     UISwipeGestureRecognizer *izquierda =
         [[UISwipeGestureRecognizer alloc] initWithTarget:self action:@selector(swipeLeft:)];
@@ -269,7 +274,7 @@
     }
 
     NSInteger actual = [self pageIndexAtCurrentPosition];
-    if (actual != self.pageIndex) {
+    if (!self.restaurandoPosicion && actual != self.pageIndex) {
         self.pageIndex = actual;
     }
 }
@@ -277,7 +282,10 @@
 - (NSInteger)pageIndexAtCurrentPosition {
     if (self.pageFrames.count == 0) return 0;
     CGFloat escala = MAX(0.0001, self.scrollView.zoomScale);
-    CGFloat y = (self.scrollView.contentOffset.y + self.scrollView.bounds.size.height * 0.32) / escala;
+    // La pagina actual es la que ocupa la parte superior visible. Usar el
+    // centro o un porcentaje alto hacia que la posicion guardada saltara de
+    // pagina al reabrir el documento.
+    CGFloat y = (self.scrollView.contentOffset.y / escala) + 1.0;
     for (NSInteger i = 0; i < (NSInteger)self.pageFrames.count; i++) {
         CGRect marco = [self frameForPage:i];
         if (y >= marco.origin.y && y < CGRectGetMaxY(marco)) return i;
@@ -342,8 +350,8 @@
         self.pagesContainer.backgroundColor = [UIColor clearColor];
         [self.scrollView addSubview:self.pagesContainer];
         [self rebuildPageFrames];
-        [self updateVisiblePages];
 
+        self.restaurandoPosicion = restore;
         if (restore) {
             IRProgress *p = self.document.progress;
             double factor = p.zoom;
@@ -353,12 +361,11 @@
                 self.aplicandoZoom = NO;
             }
             CGRect marco = [self frameForPage:self.pageIndex];
-            CGFloat y = marco.origin.y;
-            if (p.ratio > 0.0001) y += p.ratio * marco.size.height;
-            else if (p.offset.y > 0.0001) {
-                CGFloat maxY = MAX(1, self.scrollView.contentSize.height - self.scrollView.bounds.size.height);
-                y = p.offset.y * maxY;
-            }
+            // La pagina guardada manda: se restaura su parte proporcional. No
+            // se usa el desplazamiento global porque puede caer en otra pagina
+            // y mandar al principio o al final del documento.
+            CGFloat proporcion = MAX(0.0, MIN(1.0, p.ratio));
+            CGFloat y = marco.origin.y + proporcion * marco.size.height;
             CGFloat limite = MAX(0, self.scrollView.contentSize.height - self.scrollView.bounds.size.height);
             self.scrollView.contentOffset = CGPointMake(0,
                 MAX(0, MIN(limite, y * MAX(1.0, self.scrollView.zoomScale))));
@@ -366,6 +373,7 @@
             [self scrollToPageVertically:self.pageIndex animated:NO];
         }
         [self updateVisiblePages];
+        self.restaurandoPosicion = NO;
         [self applyDisplaySettings];
         return;
     }
@@ -466,12 +474,17 @@
     CGFloat escala = MIN(visible.width / MAX(1, pagina.width),
                          visible.height / MAX(1, pagina.height));
     if (escala <= 0 || !isfinite(escala)) escala = 1;
+    // Si el tamano visible no cambio, no se toca el desplazamiento: abrir un
+    // menu o mostrar la barra no debe recentrar la pagina.
+    if (fabs(escala - self.fitScale) < 0.0005) return;
+    CGPoint normalizado = [self normalizedOffset];
     self.fitScale = escala;
     self.scrollView.minimumZoomScale = escala;
     self.scrollView.maximumZoomScale = MAX(3.0, escala * 5.0);
     CGFloat objetivo = MAX(escala, MIN(self.scrollView.maximumZoomScale, escala * relativo));
     self.scrollView.zoomScale = objetivo;
     [self centerContent];
+    [self restoreNormalizedOffset:normalizado];
 }
 
 - (void)centerContent {
@@ -552,6 +565,7 @@
 }
 
 - (void)scrollViewDidScroll:(UIScrollView *)scrollView {
+    [self enforceScrollLock];
     if (self.verticalMode) [self updateVisiblePages];
 }
 
@@ -619,8 +633,8 @@
     }
 
     if (indice == self.pageIndex && self.pageView) return;
-    self.pageIndex = indice;
     [self saveProgressNow];
+    self.pageIndex = indice;
     [UIView animateWithDuration:0.12 animations:^{
         self.pageView.alpha = 0;
     } completion:^(BOOL finished) {
@@ -665,6 +679,37 @@
     self.scrollView.backgroundColor = [IRTheme shared].readingBackground;
     if (self.pageView) self.pageView.inverts = [self shouldInvert];
     for (IRPDFPageView *v in self.pageViews.allValues) v.inverts = [self shouldInvert];
+    [self applyScrollLock];
+}
+
+- (void)applyScrollLock {
+    BOOL bloqueo = [IRSettings shared].lockScrollAxis;
+    UIScrollView *sv = self.scrollView;
+    if (!sv) return;
+    sv.directionalLockEnabled = YES;
+    // Sin rebote lateral: un gesto diagonal no debe arrastrar la pagina.
+    sv.alwaysBounceHorizontal = NO;
+    sv.alwaysBounceVertical = NO;
+    if (bloqueo) [self enforceScrollLock];
+}
+
+- (void)enforceScrollLock {
+    if (![IRSettings shared].lockScrollAxis) return;
+    UIScrollView *sv = self.scrollView;
+    if (!sv || sv.isZooming || sv.isZoomBouncing) return;
+    CGPoint offset = sv.contentOffset;
+    if (self.verticalMode) {
+        // Al ampliar se permite mover lateralmente para ver los bordes.
+        if (sv.zoomScale > 1.011) return;
+        if (fabs(offset.x) < 0.5) return;
+        offset.x = 0;
+    } else {
+        if (sv.zoomScale > sv.minimumZoomScale * 1.011) return;
+        CGFloat y = -sv.contentInset.top;
+        if (fabs(offset.y - y) < 0.5) return;
+        offset.y = y;
+    }
+    sv.contentOffset = offset;
 }
 
 - (BOOL)isPaginated { return YES; }

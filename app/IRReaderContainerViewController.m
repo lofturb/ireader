@@ -375,6 +375,21 @@ shouldRecognizeSimultaneouslyWithGestureRecognizer:(UIGestureRecognizer *)otro {
                              vertical ? @"vertical" : @"horizontal"]
                       style:IRDialogActionStyleDefault
                     handler:^{ [self showScrollDirectionSheet]; }]];
+
+        BOOL bloqueo = [IRSettings shared].lockScrollAxis;
+        [acciones addObject:[IRDialogAction
+            actionWithTitle:[NSString stringWithFormat:@"Bloquear desplazamiento lateral: %@",
+                             bloqueo ? @"sí" : @"no"]
+                      style:(bloqueo ? IRDialogActionStyleSelected : IRDialogActionStyleDefault)
+                    handler:^{
+            IRSettings *ajustes = [IRSettings shared];
+            ajustes.lockScrollAxis = !ajustes.lockScrollAxis;
+            [ajustes save];
+            [self.reader applyDisplaySettings];
+            [IRToast showIn:self.view message:(ajustes.lockScrollAxis
+                ? @"Desplazamiento lateral bloqueado"
+                : @"Bloqueo lateral desactivado")];
+        }]];
     }
 
     [acciones addObject:[IRDialogAction actionWithTitle:@"Informacion del documento"
